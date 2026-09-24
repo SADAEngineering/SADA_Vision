@@ -11,6 +11,7 @@ demselben Vertrag.
 POST /api/v1/detect/crack     Bild rein, Befund raus
 POST /api/v1/preview/crack    dasselbe, als gezeichnetes PNG
 GET  /health                  Zustand, mit Modellangabe
+GET  /tools/marker.png       Druckvorlage fuer den Massstabsmarker
 GET  /docs                    OpenAPI
 ```
 
@@ -102,7 +103,21 @@ Millimetern, in dieser Rangfolge:
 | **LiDAR** aus der AR-App | `depth_mm`, `focal_px`, `tilt_deg` | gut bei annähernd frontaler Fläche |
 
 Ein gedruckter Marker neben dem Riss ist der billigste Weg zu einer
-belastbaren Zahl: ein Blatt Papier, ein Klebestreifen, fertig.
+belastbaren Zahl: ein Blatt Papier, ein Klebestreifen, fertig. Die Vorlage
+liefert der Dienst selbst:
+
+```
+http://127.0.0.1:8080/tools/marker.png?size_mm=60&marker_id=7
+```
+
+**Bei 100 Prozent drucken, nicht „an Seite anpassen".** Sonst sind aus 60 mm
+schnell 57,3, und der Fehler schlägt auf jede Rissbreite durch, ohne
+irgendwo aufzufallen. Auf der Vorlage ist deshalb eine 50-mm-Prüfstrecke
+aufgedruckt — einmal mit dem Lineal nachmessen, dann stimmt es.
+
+Der erkannte Marker wird vor der Auswertung ausgeblendet: er klebt auf dem
+Bauteil und ist kein Befund. (Ohne das meldet ihn jeder Kantenfilter als
+breitesten „Riss" im Bild — seine Schwarz-Weiß-Kanten sehen genau so aus.)
 
 Widersprechen sich zwei Quellen um mehr als 15 Prozent, steht das als Warnung
 in der Antwort — dann stimmt eine der beiden Annahmen nicht.
@@ -131,7 +146,7 @@ im Text, sondern als Test in `tests/test_width.py`.
 ## Entwickeln
 
 ```bash
-# Tests (86 Stück, laufen im Container)
+# Tests (113 Stück, laufen im Container)
 docker build -f deploy/Dockerfile --target dev -t sada-vision:test .
 docker run --rm -v "$(pwd -W):/app" sada-vision:test pytest -q
 
@@ -163,6 +178,17 @@ docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
   python training/export_onnx.py runs/crack_unet_r18/best.pt \
     --out models/crack_unet_r18.onnx
 ```
+
+Die Abnahmezahl ist keine der üblichen Kennzahlen, sondern der Fehler der
+**Messung** gegen die annotierte Wahrheit:
+
+```bash
+docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
+  python training/measure_width_error.py runs/crack_unet_r18/best.pt
+```
+
+Nicht „IoU 0,74", sondern „misst auf 0,04 mm genau" — das ist die Angabe,
+die jemand weitergeben kann.
 
 Auf CPU ist das eine Rauchprobe. Der Lauf, der in Betrieb geht, gehört auf
 eine GPU — Einzelheiten und Begründungen in
