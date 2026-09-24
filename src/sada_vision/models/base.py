@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -36,7 +37,7 @@ def _blend_window(h: int, w: int) -> np.ndarray:
 
 def tiled_probability(
     rgb: np.ndarray,
-    predict: callable,
+    predict: Callable[[np.ndarray], np.ndarray],
     tile: int,
     overlap: int,
 ) -> np.ndarray:
@@ -59,12 +60,12 @@ def tiled_probability(
     wgt = np.zeros((h, w), dtype=np.float32)
     win = _blend_window(tile, tile)
 
-    ys = list(range(0, max(1, h - tile + 1), step))
-    xs = list(range(0, max(1, w - tile + 1), step))
-    if not ys or ys[-1] != h - tile:
-        ys.append(max(0, h - tile))
-    if not xs or xs[-1] != w - tile:
-        xs.append(max(0, w - tile))
+    # Die letzte Kachel wird an den Rand gezogen, statt ueber ihn hinaus zu
+    # laufen - sonst faellt ein Streifen am unteren und rechten Bildrand
+    # weg. ``sorted(set(...))`` weil das bei einer Kante, die kuerzer als
+    # eine Kachel ist, sonst dieselbe Stelle zweimal rechnet.
+    ys = sorted({*range(0, max(1, h - tile + 1), step), max(0, h - tile)})
+    xs = sorted({*range(0, max(1, w - tile + 1), step), max(0, w - tile)})
 
     for y0 in ys:
         for x0 in xs:
