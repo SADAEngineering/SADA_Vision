@@ -11,7 +11,7 @@ demselben Vertrag.
 POST /api/v1/detect/crack     Bild rein, Befund raus
 POST /api/v1/preview/crack    dasselbe, als gezeichnetes PNG
 GET  /health                  Zustand, mit Modellangabe
-GET  /tools/marker.png       Druckvorlage fuer den Massstabsmarker
+GET  /tools/marker.png        Druckvorlage für den Maßstabsmarker
 GET  /docs                    OpenAPI
 ```
 
