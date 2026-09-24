@@ -146,6 +146,44 @@ und sie soll sie sehen. Zusätzlich sucht sie die Schwelle ab: welcher Wert
 liefert das beste `tolerant_f1`, und wo steht `width_bias` dabei. Diese
 Schwelle landet in der Begleitdatei und wird vom Dienst übernommen.
 
+## Die Abnahmezahl: Wie genau wird gemessen?
+
+IoU, F1 und tolerantes F1 beantworten, ob der Riss **gefunden** wurde. Keine
+davon beantwortet die Frage, auf die es bei diesem Produkt ankommt: *wie weit
+liegt die gemeldete Rissbreite neben der wahren?*
+
+Das lässt sich messen, ohne ein einziges Foto nachzumessen. Die Masken des
+Datensatzes sind von Menschen gezeichnet — sie **sind** die Wahrheit. Also
+läuft dieselbe Geometrie- und Breitenmessung einmal auf der wahren Maske und
+einmal auf der Vorhersage, und die beiden Zahlen werden verglichen:
+
+```
+docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
+  python training/measure_width_error.py runs/crack_unet_r18/best.pt \
+    --data data/crackseg9k/test --limit 300
+```
+
+Heraus kommt der Fehler der **ganzen Kette** — Netz, Schwelle, Skelett, Lot,
+Interpolation — in Pixeln, dazu die Zahl der nicht gefundenen und der
+erfundenen Risse. Mit einem Maßstab von 0,08 mm/px sind 0,5 px Fehler
+0,04 mm, und **das** ist die Zahl, die in eine Produktbeschreibung gehört:
+nicht „IoU 0,74", sondern „misst auf 0,04 mm genau".
+
+Zwei Zahlen daraus sind getrennt zu lesen:
+
+- `median_error_px` ist der **systematische Versatz**. Steht er bei +0,8,
+  meldet der Dienst jeden Riss um 0,8 px zu breit — das lässt sich über die
+  Schwelle korrigieren und gehört korrigiert.
+- `median_abs_error_px` ist die **Streuung**. Die bleibt, und sie ist die
+  ehrliche Angabe der Genauigkeit.
+
+Die Grenze des Verfahrens gehört in jede Aussage, die daraus abgeleitet wird:
+verglichen wird gegen die *gezeichnete* Maske, nicht gegen den Riss. Wo der
+Annotierende die Kante anders gesetzt hat als die Physik, steckt der Fehler
+schon in der Wahrheit. Eine belastbare absolute Genauigkeit gibt nur ein
+Vergleich gegen ein Rissbreitenlineal oder ein Mikroskop an einem echten
+Bauteil — das steht aus.
+
 ## Ausliefern
 
 ```
