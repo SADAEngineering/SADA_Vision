@@ -98,6 +98,58 @@ C_VisionClient : IVisionClient
         Stream image, VisionScaleOptions scale, CancellationToken ct)
 ```
 
+```csharp
+public sealed class C_VisionClient : IVisionClient
+{
+    private readonly HttpClient _http;
+
+    public async Task<CrackFindingDto> DetectCrackAsync(
+        Stream image, string fileName, VisionScaleOptions scale, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+
+        var file = new StreamContent(image);
+        file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+        form.Add(file, "image", fileName);
+
+        // Millimeter nur mitschicken, wenn sie bekannt sind. Der Dienst
+        // raet nicht - und wir raten ihm auch nichts vor.
+        if (scale.MarkerSizeMm is { } marker)
+            form.Add(new StringContent(
+                marker.ToString(CultureInfo.InvariantCulture)), "marker_size_mm");
+        else if (scale.MmPerPx is { } mmPerPx)
+            form.Add(new StringContent(
+                mmPerPx.ToString(CultureInfo.InvariantCulture)), "mm_per_px");
+
+        using var response = await _http.PostAsync("/api/v1/detect/crack", form, ct);
+
+        // 501 heisst "geplant, noch nicht trainiert" - das gehoert in die
+        // Maske als "noch nicht verfuegbar", nicht ins Fehlerprotokoll.
+        if (response.StatusCode == HttpStatusCode.NotImplemented)
+            throw new VisionTaskNotReadyException("crack");
+
+        response.EnsureSuccessStatusCode();
+        var dto = await response.Content.ReadFromJsonAsync<CrackFindingDto>(
+            cancellationToken: ct)
+            ?? throw new InvalidOperationException("Empty response from vision.");
+
+        // Ein Befund aus dem Notbehelf ist kein Befund. Er wird gespeichert,
+        // aber markiert - in einem halben Jahr weiss das sonst niemand mehr.
+        if (!dto.Model.Trained)
+            _log.LogWarning(
+                "Vision lief ohne trainiertes Modell ({Model}) - Befund unsicher.",
+                dto.Model.Name);
+
+        return dto;
+    }
+}
+```
+
+`CultureInfo.InvariantCulture` ist kein Zierrat: unter deutschem Gebietsschema
+wird aus `0.08` sonst `0,08`, und der Dienst liest das als Formularfeld, das
+er nicht deuten kann — die Anfrage scheitert mit `422`, und zwar nur auf
+Rechnern mit deutschem Gebietsschema.
+
 Zu beachten:
 
 - Kopfzeile `X-SADA-Client: traceform-worker/<version>` mitschicken, und
