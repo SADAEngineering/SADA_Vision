@@ -87,6 +87,35 @@ auf eigenen Fotos nicht als Kür am Ende, sondern als der eigentliche zweite
 Schritt — und die eigenen Fotos sollten **nah genug** aufgenommen sein, dass
 ein 0,2-mm-Riss über mehr als zwei, drei Pixel geht.
 
+### Der Hebel: nur auf linienhaften Annotationen trainieren
+
+```
+--max-annotation-width 12
+```
+
+Lässt alle Masken weg, deren mittlere Breite (Fläche / Skelettlänge) über
+dem Wert liegt — also die Abplatzungen, Schlaglöcher und zentimeterbreiten
+Fahrbahnrisse. **Die Gegenbeispiele bleiben drin**; ohne sie hält das Netz
+jede Schalungsfuge für einen Riss.
+
+Die Breiten werden einmal gemessen und neben dem Datensatz abgelegt
+(`annotation_widths.json`), danach kostet der Filter nichts.
+
+Was das bringt und was es kostet:
+
+| Grenze | Es bleiben | Wirkung |
+|---|---|---|
+| aus | 100 % | wie gehabt — mehr Daten, aber der Breitenmaßstab stimmt nicht |
+| 20 px | ~75 % | nur die gröbsten Flächen raus, kaum Datenverlust |
+| 12 px | ~45 % | klar auf Linien ausgerichtet, die Hälfte der Daten weg |
+| 8 px | ~27 % | nahe an Haarrissen, aber zu wenig zum Trainieren von Grund auf |
+
+**Der Filter ist kein Selbstzweck.** Wer von Grund auf trainiert, will die
+Datenmenge und lässt ihn aus. Wer ein vortrainiertes Netz auf feine Risse
+nachzieht, setzt ihn auf 12 und mischt eigene Fotos dazu. Ob er die
+Breitenverzerrung tatsächlich senkt, zeigt `measure_width_error.py` — nicht
+die Überlegung.
+
 Holen und entpacken:
 
 ```

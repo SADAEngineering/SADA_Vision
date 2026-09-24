@@ -10,6 +10,7 @@ Briefmarkengroesse.
 
 from __future__ import annotations
 
+import json
 import random
 from pathlib import Path
 
@@ -88,6 +89,74 @@ class CrackDataset(Dataset):
         image_t = np.transpose(out["image"], (2, 0, 1)).astype(np.float32)
         mask_t = out["mask"][None].astype(np.float32)
         return image_t, mask_t
+
+
+def annotation_widths(root: Path, refresh: bool = False) -> dict[str, float]:
+    """Mittlere Breite der annotierten Maske je Bild, in Pixeln.
+
+    Fläche geteilt durch Skelettlänge. Wird einmal gerechnet und neben dem
+    Datensatz abgelegt - für 7.000 Masken sind das ein paar Minuten, und
+    sie sollen nicht bei jedem Trainingsstart anfallen.
+    """
+    cache = root / "annotation_widths.json"
+    if cache.exists() and not refresh:
+        try:
+            return json.loads(cache.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    from skimage.morphology import skeletonize
+
+    out: dict[str, float] = {}
+    masks = sorted((root / "masks").glob("*.png"))
+    for index, path in enumerate(masks, start=1):
+        mask = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        if mask is None:
+            continue
+        binary = mask > 127
+        area = int(binary.sum())
+        if area < 40:
+            out[path.stem] = 0.0          # Gegenbeispiel, kein Riss
+            continue
+        length = int(skeletonize(binary).sum())
+        out[path.stem] = float(area / length) if length >= 5 else 999.0
+        if index % 500 == 0:
+            print(f"  Breiten gemessen: {index}/{len(masks)}", flush=True)
+
+    cache.write_text(json.dumps(out), encoding="utf-8")
+    return out
+
+
+def filter_linear(
+    root: Path,
+    names: list[str],
+    max_width_px: float,
+    keep_negatives: bool = True,
+) -> list[str]:
+    """Wirft flächige Annotationen heraus.
+
+    CrackSeg9k kommt überwiegend aus der Straßenzustandserfassung: ein
+    gutes Viertel der Masken ist kein Riss, sondern eine Abplatzung oder ein
+    Schlagloch - eine Fläche, keine Linie. Wer auf Haarrisse im Beton
+    hinauswill, lernt daran das Falsche und malt anschließend zu breit.
+
+    Die Gegenbeispiele (leere Masken) bleiben drin. Ohne sie hält das Netz
+    jede Schalungsfuge für einen Riss.
+    """
+    if max_width_px <= 0:
+        return names
+    widths = annotation_widths(root)
+    kept = []
+    for name in names:
+        w = widths.get(name)
+        if w is None:
+            kept.append(name)               # unbekannt: lieber behalten
+        elif w == 0.0:
+            if keep_negatives:
+                kept.append(name)
+        elif w <= max_width_px:
+            kept.append(name)
+    return kept
 
 
 def split_names(root: Path, val_fraction: float, seed: int = 42) -> tuple[list, list]:

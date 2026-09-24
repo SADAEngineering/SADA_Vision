@@ -40,6 +40,7 @@ from training.data import (
     IMAGENET_STD,
     CrackDataset,
     eval_transform,
+    filter_linear,
     split_names,
     train_transform,
 )
@@ -85,6 +86,11 @@ class Config:
     pos_weight: float = 4.0
     dice_weight: float = 1.0
     bce_weight: float = 1.0
+
+    # 0 = aus. Ueber 0: flaechige Annotationen (Abplatzungen, Schlagloecher)
+    # werden ausgelassen - siehe docs/Modell_und_Training.md. 12 px ist ein
+    # brauchbarer Schnitt, wenn es um Haarrisse im Beton geht.
+    max_annotation_width_px: float = 0.0
 
     limit_train: int = 0
     limit_val: int = 0
@@ -170,6 +176,16 @@ def train(config: Config, resume: Path | None) -> Path:
 
     root = Path(config.data_root)
     train_names, val_names = split_names(root, config.val_fraction, config.seed)
+    if config.max_annotation_width_px > 0:
+        vorher = len(train_names) + len(val_names)
+        train_names = filter_linear(root, train_names, config.max_annotation_width_px)
+        val_names = filter_linear(root, val_names, config.max_annotation_width_px)
+        nachher = len(train_names) + len(val_names)
+        print(
+            f"Flaechige Annotationen ausgelassen (> "
+            f"{config.max_annotation_width_px:g} px mittlere Breite): "
+            f"{vorher - nachher} von {vorher}"
+        )
     if config.limit_train:
         train_names = train_names[: config.limit_train]
     if config.limit_val:
@@ -341,6 +357,10 @@ def main() -> int:
     parser.add_argument("--threads", type=int)
     parser.add_argument("--limit-train", type=int, dest="limit_train")
     parser.add_argument("--limit-val", type=int, dest="limit_val")
+    parser.add_argument(
+        "--max-annotation-width", type=float, dest="max_annotation_width_px",
+        help="Flaechige Annotationen auslassen, z. B. 12 (Pixel mittlere Breite)",
+    )
     parser.add_argument("--name")
     args = parser.parse_args()
 
