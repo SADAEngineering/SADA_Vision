@@ -146,7 +146,7 @@ def validate(model, loader, device, config: Config) -> dict:
         images = images.to(device)
         masks = masks.to(device)
         logits = model(images)
-        total_loss += float(loss_fn(logits, masks))
+        total_loss += float(loss_fn(logits, masks).detach())
         batches += 1
 
         pred = (torch.sigmoid(logits) >= config.threshold).cpu().numpy()[:, 0]
@@ -239,7 +239,7 @@ def train(config: Config, resume: Path | None) -> Path:
             loss.backward()
             optimizer.step()
 
-            total += float(loss)
+            total += float(loss.detach())
             seen += 1
             if step % 20 == 0:
                 rate = (time.time() - started) / step

@@ -40,6 +40,10 @@ class ScaleInfo:
     confidence: float = 0.0
     note: str = ""
     homography: np.ndarray | None = None   # Bild -> Ebene, 3x3
+    # Die vier Ecken des erkannten Markers in (y, x), Originalbild. Wird
+    # gebraucht, um ihn vor der Segmentierung auszublenden: seine harten
+    # Schwarz-Weiss-Kanten sehen fuer jeden Kantenfilter wie Risse aus.
+    marker_quad: np.ndarray | None = None
     _plane_mm_per_unit: float = 1.0
 
     @property

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     model_dir: Path = Path("models")
     # Leer = kein ONNX vorhanden, der Dienst faellt auf das klassische
     # Ridge-Verfahren zurueck und meldet das in jeder Antwort.
-    crack_model: str = "crack_unet_r34.onnx"
+    crack_model: str = "crack_unet_r18.onnx"
     onnx_threads: int = 0  # 0 = onnxruntime entscheidet
 
     # --- Bildverarbeitung -------------------------------------------------

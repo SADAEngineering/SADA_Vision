@@ -53,6 +53,12 @@ def analyse_crack(
     segmenter = get_segmenter("crack")
     prob = segmenter.probability(work)
 
+    if _blank_marker(prob, scale, factor):
+        warnings.append(
+            "Der erkannte Massstabsmarker wurde von der Auswertung "
+            "ausgenommen - er liegt auf dem Bauteil, nicht darin."
+        )
+
     mask = geometry.clean_mask(prob >= threshold, min_area)
     dist = width.distance_transform(mask)
 
@@ -103,6 +109,31 @@ def analyse_crack(
         warnings=warnings,
         duration_ms=(time.perf_counter() - started) * 1000.0,
     )
+
+
+def _blank_marker(prob: np.ndarray, scale: ScaleInfo, factor: float) -> bool:
+    """Blendet den Massstabsmarker aus dem Wahrscheinlichkeitsbild aus.
+
+    Ein ArUco-Marker besteht aus harten Schwarz-Weiss-Kanten - fuer jeden
+    Kantenfilter sieht das aus wie ein Netz feiner Risse, und auch ein
+    trainiertes Netz hat so etwas im Training nie gesehen. Der Marker klebt
+    auf dem Bauteil, er ist kein Befund. Also raus damit, mit etwas Rand.
+    """
+    if scale.marker_quad is None:
+        return False
+
+    quad = np.asarray(scale.marker_quad, dtype=np.float64) / max(factor, 1e-9)
+    # (y, x) -> (x, y) fuer OpenCV
+    poly = quad[:, ::-1]
+    centre = poly.mean(axis=0)
+    # Zehn Prozent Rand: die Erkennung liefert die Ecken der schwarzen
+    # Umrandung, der weisse Rand darum gehoert ebenso wenig zum Bauteil.
+    poly = centre + (poly - centre) * 1.15
+
+    import cv2
+
+    cv2.fillPoly(prob, [poly.round().astype(np.int32)], 0.0)
+    return True
 
 
 def _build_instance(

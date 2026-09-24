@@ -272,3 +272,72 @@ def test_openapi_beschreibt_beide_endpunkte(client):
     spec = client.get("/openapi.json").json()
     assert "/api/v1/detect/crack" in spec["paths"]
     assert "/api/v1/preview/crack" in spec["paths"]
+
+
+# ------------------------------------------------------------ Druckvorlage --
+
+
+def test_markervorlage_kommt_als_png(client):
+    r = client.get("/tools/marker.png?size_mm=60&marker_id=7")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    assert "60mm" in r.headers["content-disposition"]
+
+
+def test_markervorlage_haelt_die_kantenlaenge_ein(client):
+    """Der Kreislauf: gedruckter Marker rein, derselbe Massstab raus.
+
+    Die Vorlage wird bei 300 dpi erzeugt, also 300/25,4 Pixel je Millimeter.
+    Wird sie unveraendert wieder eingelesen und mit ``marker_size_mm=60``
+    gefragt, muss genau dieser Massstab herauskommen. Ein Rechenfehler in
+    der Vorlage faellt hier auf - und nicht erst an einer falschen
+    Rissbreite auf der Baustelle.
+    """
+    import io as _io
+
+    import numpy as np
+    from PIL import Image as _Image
+
+    from sada_vision.scale.aruco import ArucoScaleResolver
+
+    r = client.get("/tools/marker.png?size_mm=60&marker_id=7&dpi=300")
+    rgb = np.asarray(_Image.open(_io.BytesIO(r.content)).convert("RGB"))
+
+    info = ArucoScaleResolver().resolve(rgb, marker_mm=60.0, marker_id=7)
+    assert info.known
+    assert info.mm_per_px == pytest.approx(25.4 / 300.0, rel=0.02)
+
+
+def test_unbekanntes_woerterbuch_wird_abgelehnt(client):
+    assert client.get("/tools/marker.png?dictionary=DICT_FANTASIE").status_code == 422
+
+
+def test_marker_wird_nicht_als_riss_vermessen(client):
+    """Der Marker klebt auf dem Bauteil - er ist kein Befund.
+
+    Seine harten Schwarz-Weiss-Kanten sehen fuer jeden Kantenfilter wie ein
+    Netz feiner Risse aus. Ohne Ausblendung meldet der Dienst den Massstab
+    selbst als breitesten Riss im Bild.
+    """
+    rgb = with_aruco(blank(600, 800), marker_id=7, size_px=200, margin=40)
+    body = _post(client, rgb, marker_size_mm=100.0).json()
+    assert body["scale"]["source"] == "aruco"
+
+    # Marker liegt links unten: y in [360, 560], x in [40, 240]
+    for inst in body["instances"]["items"]:
+        y0, x0, y1, x1 = inst["bbox_yxyx"]
+        overlaps = y1 > 350 and y0 < 570 and x1 > 30 and x0 < 250
+        assert not overlaps, f"Befund im Markerbereich: {inst['bbox_yxyx']}"
+
+    assert any("Massstabsmarker" in w for w in body["warnings"]["items"])
+
+
+def test_vorschau_beschriftet_nur_die_schwersten(client):
+    """Ein Bild mit siebzig Schildern ist keine Pruefhilfe mehr."""
+    r = client.post(
+        "/api/v1/preview/crack",
+        files={"image": ("p.png", as_png(two_cracks()), "image/png")},
+        data={"mm_per_px": "0.05", "max_labels": "2"},
+    )
+    assert r.status_code == 200
+    assert r.content[:8] == b"\x89PNG\r\n\x1a\n"

@@ -46,7 +46,27 @@ def _build(task: str) -> Segmenter:
         except Exception as exc:  # pragma: no cover - Ladefehler sind selten
             log.error("modell.ladefehler", task=task, path=str(path), error=str(exc))
 
-    log.warning("modell.fehlt", task=task, path=str(path), fallback="classic-ridge")
+    # Wenn andere Gewichte im Ordner liegen, ist fast immer der *Name*
+    # falsch gesetzt und nicht die Datei vergessen. Das gehoert in die
+    # Meldung, sonst sucht jemand eine halbe Stunde am falschen Ende.
+    others = (
+        sorted(p.name for p in settings.model_dir.glob("*.onnx"))
+        if settings.model_dir.is_dir()
+        else []
+    )
+    log.warning(
+        "modell.fehlt",
+        task=task,
+        path=str(path),
+        fallback="classic-ridge",
+        vorhanden=others,
+        hinweis=(
+            f"SADAVISION_CRACK_MODEL steht auf '{settings.crack_model}', "
+            f"im Ordner liegt aber {others}."
+        )
+        if others
+        else "Im Modellordner liegt keine ONNX-Datei.",
+    )
     return ClassicRidgeSegmenter()
 
 

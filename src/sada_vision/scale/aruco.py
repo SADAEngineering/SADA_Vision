@@ -104,6 +104,7 @@ class ArucoScaleResolver:
                 )
             ),
             homography=homography,
+            marker_quad=quad[:, ::-1].astype(np.float64),  # (x,y) -> (y,x)
             _plane_mm_per_unit=1.0,
         )
 

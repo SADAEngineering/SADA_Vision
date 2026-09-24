@@ -13,7 +13,12 @@ encoder_weights: imagenet
 
 image_size: 256
 batch_size: 16
-epochs: 14
+# 5 Epochen sind das, was auf acht Kernen in rund vier Stunden durchlaeuft.
+# Die Zahl muss zum verfuegbaren Zeitfenster passen: der Kosinus-Zeitplan
+# senkt die Lernrate ueber genau diese Spanne ab. Ein Lauf, der bei Epoche 3
+# von 14 abgebrochen wird, endet mit hoher Lernrate - und damit schlechter
+# als ein sauber zu Ende gefahrener Lauf ueber 3 Epochen.
+epochs: 5
 learning_rate: 0.0003
 weight_decay: 0.0001
 val_fraction: 0.08

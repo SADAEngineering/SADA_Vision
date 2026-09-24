@@ -143,7 +143,10 @@ docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
   python training/datasets/crackseg9k.py --out data/crackseg9k
 
 # Trainieren, bewerten, ausliefern
-docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
+#   --shm-size=2g ist Pflicht: Dockers Vorgabe von 64 MB reicht den
+#   DataLoader-Arbeitern nicht, und der Lauf stirbt mitten drin mit
+#   "Bus error" statt mit einer brauchbaren Meldung.
+docker run --rm --shm-size=2g -v "$(pwd -W):/work" -w /work sada-vision:train \
   python training/train.py --config training/configs/crack_unet_r18.yaml
 docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
   python training/evaluate.py runs/crack_unet_r18/best.pt

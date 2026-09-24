@@ -66,9 +66,23 @@ Rändern, und ein Riss ist binär.
 **CPU** (Rauchprobe und brauchbarer Anfang, kein Auslieferungsmodell):
 
 ```
-docker run --rm -v "$(pwd -W):/work" -w /work sada-vision:train \
+docker run --rm --shm-size=2g --cpus 8 \
+  -v "$(pwd -W):/work" -w /work sada-vision:train \
   python training/train.py --config training/configs/crack_unet_r18.yaml
 ```
+
+> **`--shm-size=2g` ist Pflicht.** Docker gibt einem Container 64 MB unter
+> `/dev/shm`. Die DataLoader-Arbeiter reichen ihre Stapel darüber weiter und
+> laufen voll — der Lauf stirbt dann nach Minuten mit
+> `DataLoader worker is killed by signal: Bus error`, und zwar mitten in der
+> Epoche. Wer die Meldung nicht kennt, sucht sie im eigenen Code.
+
+**Die Epochenzahl muss zum Zeitfenster passen.** Der Kosinus-Zeitplan senkt
+die Lernrate über genau die eingestellte Spanne ab. Ein auf 14 Epochen
+eingestellter Lauf, der bei Epoche 3 abgebrochen wird, endet mit hoher
+Lernrate — und liefert ein schlechteres Modell als ein sauber zu Ende
+gefahrener Lauf über 3 Epochen. Erst die Schrittzeit messen
+(`--limit-train 672 --epochs 1`), dann die Epochen festlegen.
 
 **GPU** (das Modell, das in Betrieb gehört) — auf Colab, RunPod oder einer
 eigenen Karte ab 8 GB. In `deploy/Dockerfile.train` die torch-Zeile auf die

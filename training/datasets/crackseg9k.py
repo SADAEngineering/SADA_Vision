@@ -136,8 +136,18 @@ def convert(parquet: Path, out_dir: Path, split: str, limit: int = 0) -> dict:
             if any(hint in name.lower() for hint in NONCRACK_HINTS):
                 stats["noncrack"] += 1
 
-            image.save(images_dir / f"{name}.png", optimize=True)
-            Image.fromarray(binary).save(masks_dir / f"{name}.png", optimize=True)
+            image_path = images_dir / f"{name}.png"
+            mask_path = masks_dir / f"{name}.png"
+            if image_path.exists() and mask_path.exists():
+                # Fortsetzen: ein abgebrochener Lauf faengt nicht von vorn an.
+                stats["written"] += 1
+                continue
+
+            # ``optimize=True`` sucht die beste Filterkombination und kostet
+            # ein Vielfaches der Schreibzeit. Bei 9.000 Paaren sind das
+            # Stunden - fuer Dateien, die ohnehin nur lokal liegen.
+            image.save(image_path, compress_level=1)
+            Image.fromarray(binary).save(mask_path, compress_level=1)
             stats["written"] += 1
 
             if stats["written"] % 250 == 0:

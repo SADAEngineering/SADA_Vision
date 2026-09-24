@@ -15,7 +15,7 @@ from .. import CONTRACT_VERSION, __version__
 from ..config import get_settings
 from ..logging_setup import configure_logging, get_logger
 from ..models import get_segmenter
-from . import routes_detect, routes_health, routes_preview
+from . import routes_detect, routes_health, routes_preview, routes_tools
 from .schemas import ErrorDto
 
 log = get_logger(__name__)
@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_health.router)
     app.include_router(routes_detect.router)
     app.include_router(routes_preview.router)
+    app.include_router(routes_tools.router)
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):

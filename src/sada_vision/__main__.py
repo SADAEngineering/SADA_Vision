@@ -14,6 +14,11 @@ def main() -> None:
         port=int(os.environ.get("SADAVISION_PORT", "8080")),
         reload=os.environ.get("SADAVISION_RELOAD", "0") == "1",
         log_config=None,  # structlog macht das Protokoll
+        # Uvicorns Zugriffsprotokoll ist Klartext. In einem Strom, der sonst
+        # aus JSON-Zeilen besteht, ist das fuer jede Auswertung Muell - und
+        # die Middleware protokolliert ohnehin jede Anfrage, mit
+        # Korrelationskennung und Dauer.
+        access_log=False,
     )
 
 
