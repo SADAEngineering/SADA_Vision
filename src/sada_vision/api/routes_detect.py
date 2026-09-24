@@ -13,6 +13,7 @@ from ..pipeline.preprocess import ImageRejected, decode
 from ..scale import resolve_scale
 from .mapping import analysis_to_dto
 from .schemas import DetectionResponseDto
+from .workload import run_heavy
 
 log = get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["detection"])
@@ -64,26 +65,32 @@ async def detect_crack(
             detail=f"Unknown width_method '{width_method}'.",
         )
 
-    scale, scale_warnings = resolve_scale(
-        source.rgb,
-        mm_per_px=mm_per_px,
-        marker_size_mm=marker_size_mm,
-        marker_id=marker_id,
-        marker_dictionary=marker_dictionary,
-        depth_mm=depth_mm,
-        focal_px=focal_px,
-        tilt_deg=tilt_deg,
-    )
+    # Massstab und Analyse rechnen beide synchron und sekundenlang. In der
+    # Ereignisschleife wuerde das den ganzen Prozess anhalten - siehe
+    # workload.py.
+    def compute():
+        scale, scale_warnings = resolve_scale(
+            source.rgb,
+            mm_per_px=mm_per_px,
+            marker_size_mm=marker_size_mm,
+            marker_id=marker_id,
+            marker_dictionary=marker_dictionary,
+            depth_mm=depth_mm,
+            focal_px=focal_px,
+            tilt_deg=tilt_deg,
+        )
+        result = analyse_crack(
+            source,
+            scale,
+            threshold=None if threshold < 0 else threshold,
+            min_area_px=None if min_area_px < 0 else min_area_px,
+            max_instances=None if max_instances < 0 else max_instances,
+            width_method=width_method or None,
+        )
+        result.warnings = scale_warnings + result.warnings
+        return result
 
-    analysis = analyse_crack(
-        source,
-        scale,
-        threshold=None if threshold < 0 else threshold,
-        min_area_px=None if min_area_px < 0 else min_area_px,
-        max_instances=None if max_instances < 0 else max_instances,
-        width_method=width_method or None,
-    )
-    analysis.warnings = scale_warnings + analysis.warnings
+    analysis = await run_heavy(compute)
 
     log.info(
         "befund",

@@ -23,6 +23,7 @@ from ..domain import Analysis
 from ..pipeline import analyse_crack
 from ..pipeline.preprocess import ImageRejected, decode
 from ..scale import resolve_scale
+from .workload import run_heavy
 
 router = APIRouter(prefix="/api/v1", tags=["detection"])
 
@@ -62,20 +63,22 @@ async def preview_crack(
         # 422 als Zahl: Starlette hat die Konstante umbenannt, die Zahl bleibt.
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    scale, _ = resolve_scale(
-        source.rgb,
-        mm_per_px=mm_per_px,
-        marker_size_mm=marker_size_mm,
-        marker_id=marker_id,
-        depth_mm=depth_mm,
-        focal_px=focal_px,
-        tilt_deg=tilt_deg,
-    )
-    analysis = analyse_crack(
-        source, scale, threshold=None if threshold < 0 else threshold
-    )
+    def compute():
+        scale, _warnings = resolve_scale(
+            source.rgb,
+            mm_per_px=mm_per_px,
+            marker_size_mm=marker_size_mm,
+            marker_id=marker_id,
+            depth_mm=depth_mm,
+            focal_px=focal_px,
+            tilt_deg=tilt_deg,
+        )
+        analysis = analyse_crack(
+            source, scale, threshold=None if threshold < 0 else threshold
+        )
+        return draw_overlay(source.rgb, analysis, line_width, max_labels)
 
-    canvas = draw_overlay(source.rgb, analysis, line_width, max_labels)
+    canvas = await run_heavy(compute)
     buffer = io.BytesIO()
     Image.fromarray(canvas).save(buffer, format="PNG", optimize=True)
     return Response(content=buffer.getvalue(), media_type="image/png")

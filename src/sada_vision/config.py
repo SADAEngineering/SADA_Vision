@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     # --- Grenzen ----------------------------------------------------------
     max_upload_bytes: int = 30 * 1024 * 1024
+    # Mehr gleichzeitige Rechnungen als Kerne machen alles langsamer, nicht
+    # schneller - jede Bibliothek nimmt sich ohnehin schon mehrere Kerne.
+    max_concurrent_analyses: int = 2
     max_instances: int = 200
     max_points_per_path: int = 2000
 
