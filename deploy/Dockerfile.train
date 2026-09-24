@@ -26,7 +26,15 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 RUN pip install --index-url https://download.pytorch.org/whl/cpu \
       "torch==2.8.0" "torchvision==0.23.0"
 
+# Die Bewertung laeuft bewusst ueber den Code des *Dienstes* - dieselbe
+# Kachelung, dieselbe Geometrie, dieselbe Breitenmessung. Sonst misst man
+# etwas anderes als das, was spaeter ausgeliefert wird. Dafuer braucht das
+# Trainings-Image die Grundlagen von `sada_vision`, auch wenn hier nie ein
+# Webdienst laeuft: ohne pydantic-settings scheitert schon der Import.
 RUN pip install \
+      "pydantic>=2.9" \
+      "pydantic-settings>=2.6" \
+      "structlog>=24.4" \
       "segmentation-models-pytorch>=0.5" \
       "albumentations>=1.4" \
       "opencv-contrib-python-headless>=4.10" \
