@@ -132,7 +132,7 @@ Riss, dessen Breite man vorher kennt. Auf echten Fotos weiß das niemand.
 `tests/synthetic.py` zeichnet sie — vierfach vergrößert und dann verkleinert,
 damit eine Breite von 2,5 Pixeln überhaupt darstellbar ist.
 
-Vier Gruppen müssen existieren:
+Sechs Gruppen müssen existieren:
 
 1. **Messung gegen bekannte Breite** (`test_width.py`) — und der Nachweis,
    dass das lotrechte Verfahren genauer ist als die Distanztransformation.
@@ -147,10 +147,20 @@ Vier Gruppen müssen existieren:
 4. **Vertrag** (`test_api.py`) — kein `null` in der ganzen Antwort, Listen im
    Umschlag, `path_yx` doppelt so lang wie `point_count`, Koordinaten im
    Bild. Wer einen dieser Tests rot macht, bricht einen Aufrufer.
+5. **ONNX-Pfad** (`test_onnx.py`) — der, der im Betrieb läuft. Gegen ein
+   365 Byte großes Testmodell, das kein Netz ist, sondern ein fester
+   Rechenweg: dunkle Pixel gelten als Riss. Die teuerste Fehlerklasse ist
+   hier die **falsche Normierung** — sie fällt nicht als Fehler auf,
+   sondern als schlechte Erkennung, Monate später.
+6. **Kachelung und Last** (`test_tiling.py`, `test_workload.py`) — jeder
+   Pixel genau einmal abgedeckt, keine Naht, und der Dienst bleibt
+   während einer Rechnung ansprechbar. Beides sind Fehler, die nur unter
+   Last auftreten und die eine einzelne Anfrage nie bemerkt.
 
-Die Güte des *Modells* prüft keiner davon — das macht
-`training/evaluate.py` auf dem zurückgehaltenen Testteil, über die
-Kachelung des Dienstes und nicht auf 256er-Ausschnitten.
+Die Güte des *Modells* prüft keiner davon — das machen
+`training/evaluate.py` (Erkennung) und `training/measure_width_error.py`
+(Messung) auf dem zurückgehaltenen Testteil, über die Kachelung des
+Dienstes und nicht auf 256er-Ausschnitten.
 
 Ausgeführt wird im Container, weil es auf den Arbeitsrechnern kein Python
 gibt:
@@ -175,6 +185,16 @@ Deshalb drei Zahlen nebeneinander (`training/metrics.py`):
 | `width_bias` | Malt das Netz **zu breit**? Über 1,0 = zu dick, und damit jede gemeldete Breite zu groß |
 
 Ausgewählt wird der beste Prüfpunkt nach `tolerant_f1`, nicht nach IoU.
+
+**Die Abnahmezahl ist keine davon.** Sie kommt aus
+`training/measure_width_error.py`: dieselbe Breitenmessung einmal auf der
+annotierten Wahrheit und einmal auf der Vorhersage, Differenz in Pixeln.
+Das ist der Fehler der ganzen Kette — Netz, Schwelle, Skelett, Lot,
+Interpolation. Bei 0,08 mm/px sind 0,5 px gleich 0,04 mm, und **das** ist
+die Zahl, die in eine Produktbeschreibung gehört: nicht „IoU 0,74", sondern
+„misst auf 0,04 mm genau". Systematischer Versatz und Streuung werden
+getrennt ausgewiesen — der Versatz lässt sich über die Schwelle korrigieren,
+die Streuung bleibt.
 
 ## Konventionen
 
