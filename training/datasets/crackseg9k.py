@@ -158,17 +158,25 @@ def convert(parquet: Path, out_dir: Path, split: str, limit: int = 0) -> dict:
 
 
 def _name_of(raw_name, image_bytes: bytes, index: int) -> str:
-    """Stabiler Dateiname - moeglichst der Originalname, sonst ein Hash."""
+    """Stabiler Dateiname - moeglichst der Originalname, sonst ein Hash.
+
+    Die Spalte ``head`` traegt bei diesem Datensatz **keinen** Dateinamen,
+    sondern Binaerdaten. Wer sie blind dekodiert, bekommt Dateinamen voller
+    Steuerzeichen - unter Windows unbrauchbar und in jedem Protokoll
+    unlesbar. Uebernommen wird sie deshalb nur, wenn dabei wirklich Text
+    herauskommt.
+    """
     decoded = _decode(raw_name)
     if decoded:
-        try:
-            text = decoded.decode("utf-8", errors="ignore").strip()
-            text = Path(text).stem
-            safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in text)
-            if safe:
-                return f"{index:06d}_{safe[:60]}"
-        except UnicodeDecodeError:
-            pass
+        text = decoded.decode("utf-8", errors="ignore").strip()
+        text = Path(text).stem
+        safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in text)
+        stripped = safe.strip("_")
+        # Mindestens vier verwertbare Zeichen, und nicht ueberwiegend
+        # Ersatzstriche - sonst war es kein Name.
+        if len(stripped) >= 4 and stripped.count("_") < len(stripped) / 2:
+            return f"{index:06d}_{stripped[:60]}"
+
     digest = hashlib.sha1(image_bytes).hexdigest()[:10]
     return f"{index:06d}_{digest}"
 
