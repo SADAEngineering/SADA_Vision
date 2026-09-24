@@ -132,6 +132,36 @@ in der Literatur. Steht es bei 1,3, meldet der Dienst jede Rissbreite um
 30 Prozent zu groß — und zwar plausibel, also unauffällig. Es ist die Zahl,
 die vor der Inbetriebnahme stimmen muss.
 
+### `pos_weight` und `width_bias` ziehen gegeneinander
+
+Das ist kein Randproblem, sondern die zentrale Abwägung dieses Modells, und
+sie wurde beim ersten Lauf sofort sichtbar: nach einer Epoche stand
+`tolerant_f1` bei 0,68 — und `width_bias` bei **1,35**.
+
+Der Grund liegt in der Verlustfunktion. `pos_weight = 4` sagt dem Netz, dass
+ein übersehener Risspixel viermal so teuer ist wie ein fälschlich als Riss
+markierter. Das ist richtig, damit überhaupt etwas gefunden wird — führt aber
+dazu, dass das Netz im Zweifel **großzügig** malt. Bei einem Gegenstand, der
+drei Pixel breit ist, wird aus Großzügigkeit sofort ein Drittel mehr Breite.
+
+Beides gleichzeitig lässt sich nicht über den Verlust lösen. Der Weg ist die
+Arbeitsteilung:
+
+- **Das Training** optimiert auf *Finden* (`pos_weight` hoch, Auswahl nach
+  `tolerant_f1`).
+- **Die Schwelle** korrigiert das *Messen*. `evaluate.py` sucht sie ab, und
+  eine höhere Schwelle schneidet den großzügigen Rand wieder weg.
+
+Deshalb wird die gefundene Schwelle in die Begleitdatei geschrieben, und
+deshalb hat sie im Dienst Vorrang vor der globalen Vorgabe. Rangfolge:
+**Aufrufer → Modell → Vorgabe.** Fällt die mittlere Stufe weg, misst der
+Dienst mit einem fremden Wert und meldet systematisch zu breit — ohne dass
+irgendetwas darauf hinweist. `tests/test_onnx.py` hält das fest.
+
+Bleibt `width_bias` auch bei der besten Schwelle deutlich über 1,1, hilft
+keine Schwelle mehr: dann ist entweder zu kurz trainiert oder `pos_weight`
+zu hoch.
+
 Ausgewählt wird der beste Prüfpunkt nach `tolerant_f1`, nicht nach IoU.
 
 ```

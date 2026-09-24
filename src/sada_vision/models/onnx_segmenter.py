@@ -42,6 +42,7 @@ class OnnxSegmenter:
             kind="onnx",
             trained=True,
             note=meta.get("note", ""),
+            threshold=float(meta.get("threshold", -1.0) or -1.0),
         )
         self._mean = np.array(meta.get("mean", _IMAGENET_MEAN), dtype=np.float32)
         self._std = np.array(meta.get("std", _IMAGENET_STD), dtype=np.float32)

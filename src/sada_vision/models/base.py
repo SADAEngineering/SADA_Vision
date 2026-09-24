@@ -15,6 +15,12 @@ class SegmenterInfo:
     kind: str          # "onnx" | "classic"
     trained: bool      # False = Notbehelf ohne gelernte Gewichte
     note: str = ""
+    # Die Schwelle, bei der *dieses* Modell am besten liegt - aus der
+    # Begleitdatei. -1 heisst "keine eigene", dann gilt die Vorgabe des
+    # Dienstes. Jedes Modell hat seine eigene: sie wird beim Bewerten
+    # abgesucht und korrigiert unter anderem die Breitenverzerrung. Wer sie
+    # hier fallen laesst, misst systematisch zu breit oder zu schmal.
+    threshold: float = -1.0
 
 
 class Segmenter(Protocol):

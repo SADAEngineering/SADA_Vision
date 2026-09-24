@@ -36,10 +36,23 @@ def analyse_crack(
     settings = get_settings()
     started = time.perf_counter()
 
-    threshold = settings.mask_threshold if threshold is None else float(threshold)
     min_area = settings.min_component_area_px if min_area_px is None else int(min_area_px)
     limit = settings.max_instances if max_instances is None else int(max_instances)
     method = width_method or settings.width_method
+
+    segmenter = get_segmenter("crack")
+
+    # Rangfolge der Schwelle: was der Aufrufer sagt, sonst was zu *diesem*
+    # Modell gehoert, sonst die Vorgabe des Dienstes. Die mittlere Stufe ist
+    # die wichtige: die modelleigene Schwelle wird beim Bewerten abgesucht
+    # und korrigiert unter anderem die Breitenverzerrung. Faellt sie weg,
+    # misst der Dienst mit einem fremden Wert - und zwar stillschweigend.
+    if threshold is not None:
+        threshold = float(threshold)
+    elif segmenter.info.threshold > 0:
+        threshold = segmenter.info.threshold
+    else:
+        threshold = settings.mask_threshold
 
     work, factor = working_image(source)
     warnings: list[str] = []
@@ -50,7 +63,6 @@ def analyse_crack(
             f"SADAVISION_MAX_EDGE_PX anheben, wenn die Breiten zaehlen."
         )
 
-    segmenter = get_segmenter("crack")
     prob = segmenter.probability(work)
 
     if _blank_marker(prob, scale, factor):

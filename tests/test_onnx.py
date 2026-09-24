@@ -166,3 +166,57 @@ def test_ganze_pipeline_mit_onnx_modell(model_dir, monkeypatch):
     # 5 px bei 0,04 mm/px sind 0,2 mm
     widths = np.concatenate([p.width_mm for p in inst.paths])
     assert abs(float(np.median(widths)) - 0.2) < 0.06
+
+
+def test_modelleigene_schwelle_wird_verwendet(model_dir, monkeypatch):
+    """Die Schwelle aus der Begleitdatei schlaegt die Vorgabe des Dienstes.
+
+    Sie wird beim Bewerten abgesucht und korrigiert unter anderem die
+    Breitenverzerrung - ein Netz, das Risse zu breit malt, wird damit
+    wieder geradegerueckt. Faellt sie weg, misst der Dienst mit einem
+    fremden Wert, und zwar stillschweigend.
+    """
+    import json as _json
+
+    from sada_vision.domain import ScaleInfo, SourceImage
+    from sada_vision.pipeline import analyse_crack
+
+    meta = _json.loads((model_dir / "crack_unet_r18.json").read_text())
+    meta["threshold"] = 0.8      # deutlich strenger als die Vorgabe 0,5
+    (model_dir / "crack_unet_r18.json").write_text(_json.dumps(meta), encoding="utf-8")
+
+    monkeypatch.setenv("SADAVISION_MODEL_DIR", str(model_dir))
+    reset_settings()
+    registry.reset_cache()
+    assert registry.get_segmenter("crack").info.threshold == pytest.approx(0.8)
+
+    # Weicher Verlauf von hell nach dunkel: wo genau die Maske endet,
+    # haengt allein an der Schwelle.
+    rgb = np.zeros((200, 400, 3), np.uint8)
+    rgb[:, :] = np.linspace(255, 0, 400).astype(np.uint8)[None, :, None]
+    source = SourceImage(rgb=rgb, width=400, height=200)
+
+    streng = analyse_crack(source, ScaleInfo(source="none"))
+    locker = analyse_crack(source, ScaleInfo(source="none"), threshold=0.5)
+
+    flaeche_streng = sum(i.area_px for i in streng.instances)
+    flaeche_locker = sum(i.area_px for i in locker.instances)
+    assert flaeche_streng < flaeche_locker, (
+        "Die strengere Modellschwelle muss eine kleinere Maske ergeben - "
+        "sonst wurde sie ignoriert"
+    )
+
+
+def test_ohne_eigene_schwelle_gilt_die_vorgabe(model_dir, monkeypatch):
+    monkeypatch.setenv("SADAVISION_MODEL_DIR", str(model_dir))
+    reset_settings()
+    registry.reset_cache()
+    # Die Begleitdatei des Testmodells nennt 0,5 - dasselbe wie die Vorgabe.
+    assert registry.get_segmenter("crack").info.threshold == pytest.approx(0.5)
+    assert get_settings().mask_threshold == pytest.approx(0.5)
+
+
+def test_notbehelf_hat_keine_eigene_schwelle():
+    from sada_vision.models.classic_segmenter import ClassicRidgeSegmenter
+
+    assert ClassicRidgeSegmenter().info.threshold == -1.0
