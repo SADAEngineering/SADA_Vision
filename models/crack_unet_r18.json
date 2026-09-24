@@ -1,0 +1,35 @@
+{
+  "name": "crack_unet_r18",
+  "architecture": "unet",
+  "encoder": "resnet18",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "tile": 256,
+  "tile_overlap": 32,
+  "threshold": 0.5,
+  "dataset": "CrackSeg9k (CC0 1.0), Kulkarni et al., arXiv:2208.13054",
+  "checkpoint": "runs/crack_unet_r18/best.pt",
+  "train_metrics": {
+    "iou": 0.5051907336486918,
+    "f1": 0.6712647405476284,
+    "precision": 0.6208869396570901,
+    "recall": 0.7305395867266512,
+    "tolerant_f1": 0.7530334720256544,
+    "width_bias": 1.2288804558431612,
+    "loss": 0.5504855014182426,
+    "epoch": 2,
+    "train_loss": 0.6698785006575233,
+    "lr": 0.00020153492169843,
+    "minutes": 40.597707243760425
+  },
+  "test_metrics": {},
+  "note": "CrackSeg9k, tolerantes F1 0.753, IoU 0.505, Breitenverzerrung 1.23"
+}

@@ -255,8 +255,13 @@ und ONNX-Export.
 **Als Nächstes, in dieser Reihenfolge:**
 
 1. Rissmodell auf GPU fertig trainieren, bewerten, exportieren, in Betrieb
-2. Eigene SADA-Fotos annotieren und feintunen — öffentliche Datensätze
-   kennen euren Beton nicht
+2. Eigene SADA-Fotos annotieren und feintunen — **das ist kein Feinschliff,
+   sondern der eigentliche zweite Schritt.** CrackSeg9k kommt überwiegend aus
+   der Straßenzustandserfassung: der Median der annotierten Risse liegt bei
+   6,7 px mittlerer Breite, bei 0,08 mm/px also rund 0,54 mm. Die
+   Grenzwerte im Stahlbeton liegen bei 0,2 bis 0,4 mm — zwei bis fünf Pixel.
+   Das Netz lernt dort also überwiegend Risse, die breiter sind als die, auf
+   die es ankommt. Einzelheiten in `docs/Modell_und_Training.md`
 3. Anbindung an TraceForm (`docs/TraceForm_Anbindung.md`)
 4. AR-Rückprojektion in der Unity-App (`docs/AR_Rueckprojektion.md`)
 5. Schrauben (`bolt`), dann Korrosion (`corrosion`)

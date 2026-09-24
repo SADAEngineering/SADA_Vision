@@ -48,6 +48,45 @@ Die Lizenz war das Auswahlkriterium. Viele Rissdatensätze stehen unter „nur
 für Forschung" — in einem Produkt, das verkauft wird, ist das eine Zeitbombe.
 CC0 heißt: kein Copyleft, keine Namensnennungspflicht, kein Risiko.
 
+### Was in diesem Datensatz wirklich drin ist — und warum das zählt
+
+Nachgemessen an 800 zufälligen Masken des Testteils (Fläche geteilt durch
+Skelettlänge, also die mittlere Breite des annotierten Risses):
+
+| Mittlere Breite der Annotation | Anteil |
+|---|---|
+| bis 6 px | 40 % |
+| 6–12 px | 30 % |
+| 12–25 px | 19 % |
+| über 25 px | 10 % |
+| *ohne Riss (Gegenbeispiele)* | *16 % aller Bilder* |
+
+Median: **6,7 px**. Und darin steckt die wichtigste Einschränkung dieses
+Datensatzes für unseren Zweck.
+
+CrackSeg9k kommt überwiegend aus der **Straßenzustandserfassung** — Crack500,
+GAPs und CrackTree sind Fahrbahnaufnahmen. Die dortigen Risse sind
+zentimeterbreite Fahrbahnrisse, Ausbrüche und Schlaglöcher; ein Teil der
+Masken ist gar keine Linie, sondern ein Fleck. Ein Beispiel aus dem Testteil
+zeigt eine Abplatzung im Asphalt, annotiert als „Riss".
+
+Für ein Bauwerksprüfungs-Produkt heißt das zweierlei:
+
+**Erstens: die Maßstäbe passen nicht zusammen.** Bei einem typischen Maßstab
+von 0,08 mm/px ist ein Riss von 6,7 px rund **0,54 mm** breit. Die Grenzwerte,
+um die es im Stahlbeton geht, liegen bei 0,2 bis 0,4 mm — also bei zwei bis
+fünf Pixeln. Das Netz lernt hier also überwiegend Risse, die **breiter sind
+als die, auf die es bei euch ankommt**. Das ist ein guter Teil der Erklärung
+für `width_bias > 1`.
+
+**Zweitens: das ist kein Mangel, sondern ein Auftrag.** Als Vortraining ist
+der Datensatz hervorragend — 9.000 Bilder, CC0, mit Gegenbeispielen, und das
+Netz lernt daran, was eine rissartige Struktur überhaupt ist. Was es *nicht*
+lernt, ist euer Beton bei eurem Aufnahmeabstand. Deshalb steht das Feintuning
+auf eigenen Fotos nicht als Kür am Ende, sondern als der eigentliche zweite
+Schritt — und die eigenen Fotos sollten **nah genug** aufgenommen sein, dass
+ein 0,2-mm-Riss über mehr als zwei, drei Pixel geht.
+
 Holen und entpacken:
 
 ```
