@@ -46,10 +46,17 @@ src/sada_vision/
   scale/          Pixel -> Millimeter: Marker, Vorgabe, LiDAR
 training/         Datensatz, Training, Bewertung, ONNX-Export - fährt nie mit
 deploy/           Dockerfile (Dienst), Dockerfile.train, compose
+tools/            vision.ps1 - die langen Docker-Aufrufe in kurz
 tests/            Auch die synthetischen Risse mit bekannter Breite
 docs/             Vertrag, TraceForm-Anbindung, AR-Rückprojektion, Modell
 models/           Die Gewichte. Nicht in Git.
+samples/          Probebilder. Nicht in Git.
 ```
+
+**In `deploy/Dockerfile` steht `runtime` zuletzt, und das muss so bleiben.**
+Ein Build ohne `--target` nimmt die letzte Stufe. Stünde dort die Test-Stufe,
+lieferte `docker build -t sada-vision .` ein Image aus, das beim Start pytest
+aufruft — ohne jede Meldung, die darauf hinweist.
 
 **Die Richtung ist eine Einbahnstraße:** `api` kennt `pipeline`, `pipeline`
 kennt `models` und `domain`, `domain` kennt nichts. Der Vertrag lebt

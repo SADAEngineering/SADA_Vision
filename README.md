@@ -16,7 +16,16 @@ GET  /docs                    OpenAPI
 
 ## In fünf Minuten
 
-Es braucht nur Docker — kein Python auf dem Rechner.
+Es braucht nur Docker — kein Python auf dem Rechner. Auf Windows nimmt
+`tools\vision.ps1` einem die langen Aufrufe ab:
+
+```powershell
+.\tools\vision.ps1 build                       # alle drei Images
+.\tools\vision.ps1 serve                       # Dienst auf 127.0.0.1:8080
+.\tools\vision.ps1 probe foto.jpg marker_size_mm=60
+```
+
+Darunter passiert nichts anderes als das hier:
 
 ```bash
 # Bauen
