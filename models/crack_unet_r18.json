@@ -14,22 +14,29 @@
   ],
   "tile": 256,
   "tile_overlap": 32,
-  "threshold": 0.5,
+  "threshold": 0.93,
   "dataset": "CrackSeg9k (CC0 1.0), Kulkarni et al., arXiv:2208.13054",
   "checkpoint": "runs/crack_unet_r18/best.pt",
   "train_metrics": {
-    "iou": 0.5051907336486918,
-    "f1": 0.6712647405476284,
-    "precision": 0.6208869396570901,
-    "recall": 0.7305395867266512,
-    "tolerant_f1": 0.7530334720256544,
-    "width_bias": 1.2288804558431612,
-    "loss": 0.5504855014182426,
-    "epoch": 2,
-    "train_loss": 0.6698785006575233,
-    "lr": 0.00020153492169843,
-    "minutes": 40.597707243760425
+    "iou": 0.5438600830645199,
+    "f1": 0.7045458186663814,
+    "precision": 0.6357631510803625,
+    "recall": 0.7900170866468024,
+    "tolerant_f1": 0.7775332605463318,
+    "width_bias": 1.3123471364374557,
+    "loss": 0.4760103580114004,
+    "epoch": 5,
+    "train_loss": 0.5432585338373932,
+    "lr": 1.4999999999999999e-05,
+    "minutes": 38.09017086823781
   },
-  "test_metrics": {},
-  "note": "CrackSeg9k, tolerantes F1 0.753, IoU 0.505, Breitenverzerrung 1.23"
+  "test_metrics": {
+    "iou": 0.5896394656460654,
+    "f1": 0.7418530784984286,
+    "precision": 0.7739489658680879,
+    "recall": 0.7123132424003614,
+    "tolerant_f1": 0.7973742560519341,
+    "width_bias": 1.0587348537604233
+  },
+  "note": "CrackSeg9k, tolerantes F1 0.797, IoU 0.590, Breitenverzerrung 1.06"
 }

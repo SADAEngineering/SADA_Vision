@@ -76,9 +76,11 @@ def run(
     data_root: Path,
     limit: int,
     threshold: float,
+    max_annotation_width: float = 0.0,
 ) -> dict:
     import torch
 
+    from training.data import filter_linear
     from training.evaluate import load_model, probability
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,6 +89,21 @@ def run(
     overlap = max(32, tile // 8)
 
     names = sorted(p.stem for p in (data_root / "images").glob("*.png"))
+
+    # Ohne Filter misst man ueberwiegend gegen Abplatzungen und Schlagloecher -
+    # dort ist die "Breite" der Durchmesser einer Flaeche, nicht die eines
+    # Risses. Fuer die Frage "wie genau misst der Dienst eine Rissbreite" ist
+    # das die falsche Grundgesamtheit.
+    if max_annotation_width > 0:
+        vorher = len(names)
+        names = filter_linear(
+            data_root, names, max_annotation_width, keep_negatives=False
+        )
+        print(
+            f"Nur linienhafte Annotationen (<= {max_annotation_width:g} px "
+            f"mittlere Breite): {len(names)} von {vorher}"
+        )
+
     if limit:
         names = names[:limit]
 
@@ -132,7 +149,9 @@ def run(
         if index % 50 == 0:
             print(f"  {index}/{len(names)}", flush=True)
 
-    return _summarise(rows, missed, invented, len(names), threshold, checkpoint)
+    return _summarise(
+        rows, missed, invented, len(names), threshold, checkpoint, max_annotation_width
+    )
 
 
 def _summarise(
@@ -142,6 +161,7 @@ def _summarise(
     total: int,
     threshold: float,
     checkpoint: Path,
+    max_annotation_width: float = 0.0,
 ) -> dict:
     if not rows:
         return {"error": "Kein einziges Bildpaar vergleichbar."}
@@ -163,6 +183,7 @@ def _summarise(
     return {
         "checkpoint": str(checkpoint),
         "threshold": threshold,
+        "max_annotation_width": max_annotation_width,
         "images_total": total,
         "images_compared": len(rows),
         "images_missed": missed,
@@ -179,10 +200,21 @@ def main() -> int:
     parser.add_argument("--data", type=Path, default=Path("data/crackseg9k/test"))
     parser.add_argument("--limit", type=int, default=300)
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--max-annotation-width", type=float, default=0.0,
+        dest="max_annotation_width",
+        help="Nur linienhafte Annotationen messen, z. B. 12 (Pixel)",
+    )
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
-    report = run(args.checkpoint, args.data, args.limit, args.threshold)
+    report = run(
+        args.checkpoint,
+        args.data,
+        args.limit,
+        args.threshold,
+        args.max_annotation_width,
+    )
     text = json.dumps(report, indent=2, ensure_ascii=False)
     print(text)
 

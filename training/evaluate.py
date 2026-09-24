@@ -25,7 +25,15 @@ import torch
 from training.data import IMAGENET_MEAN, IMAGENET_STD
 from training.metrics import Running
 
-THRESHOLDS = (0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7)
+# Nach oben hin dichter abgetastet: ein Netz, das zu breit malt, wird ueber
+# eine hoehere Schwelle korrigiert - dort muss die Aufloesung liegen.
+THRESHOLDS = (
+    0.3, 0.4, 0.5, 0.6, 0.7, 0.75,
+    # Oben dicht abgetastet: das tolerante F1 ist ueber den ganzen Bereich
+    # fast flach, die Breitenverzerrung faellt aber stetig. Die interessante
+    # Gegend liegt also weit oben, nicht bei 0,5.
+    0.8, 0.85, 0.9, 0.93, 0.95, 0.97, 0.98,
+)
 
 
 def load_model(checkpoint: Path, device: torch.device):
@@ -95,12 +103,49 @@ def evaluate(
             f"{t:.2f}": running.summary() for t, running in per_threshold.items()
         },
     }
-    best = max(
-        report["by_threshold"].items(), key=lambda kv: kv[1]["tolerant_f1"]
-    )
-    report["best_threshold"] = float(best[0])
-    report["best"] = best[1]
+    report.update(_choose_threshold(report["by_threshold"]))
     return report
+
+
+# Wie weit das tolerante F1 hinter dem besten zurueckbleiben darf, damit eine
+# Schwelle noch in die engere Wahl kommt.
+_F1_TOLERANZ = 0.02
+
+
+def _choose_threshold(by_threshold: dict) -> dict:
+    """Welche Schwelle der Dienst nehmen soll.
+
+    Die naheliegende Antwort - die mit dem besten toleranten F1 - beantwortet
+    die falsche Frage. Sie optimiert aufs **Finden**; das Produkt lebt aber
+    vom **Messen**, und dafuer muss ``width_bias`` bei 1 liegen. Beide Optima
+    fallen nicht zusammen: eine niedrige Schwelle findet mehr und malt breiter.
+
+    Also: unter allen Schwellen, die beim Finden hoechstens zwei Prozentpunkte
+    hinter der besten liegen, die mit der geringsten Breitenverzerrung. Das
+    kostet ein wenig Trefferquote und kauft dafuer eine Messung, der man
+    glauben kann.
+    """
+    rows = [(float(t), m) for t, m in by_threshold.items()]
+    bester_f1 = max(m["tolerant_f1"] for _, m in rows)
+    engere_wahl = [
+        (t, m) for t, m in rows if m["tolerant_f1"] >= bester_f1 - _F1_TOLERANZ
+    ]
+
+    def verzerrung(row) -> float:
+        bias = row[1].get("width_bias")
+        return abs(bias - 1.0) if bias and np.isfinite(bias) else 9.9
+
+    gewaehlt = min(engere_wahl, key=verzerrung)
+    nur_f1 = max(rows, key=lambda kv: kv[1]["tolerant_f1"])
+
+    return {
+        "best_threshold": gewaehlt[0],
+        "best": gewaehlt[1],
+        "shortlist": sorted(t for t, _ in engere_wahl),
+        # Zum Vergleich: was herauskaeme, wenn nur aufs Finden geschaut wuerde.
+        "f1_only_threshold": nur_f1[0],
+        "f1_only": nur_f1[1],
+    }
 
 
 def main() -> int:

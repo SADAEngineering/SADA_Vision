@@ -247,10 +247,26 @@ Zwei Besonderheiten dieses Repos:
 ## Wo wir stehen
 
 **Gebaut und geprüft:** Dienst, Vertrag, Pipeline, Breitenmessung, alle drei
-Maßstabswege, Vorschaubild, Container, Trainingsweg samt Datensatz, Bewertung
-und ONNX-Export.
+Maßstabswege, Markervorlage, Vorschaubild, Container, Trainingsweg samt
+Datensatz, Bewertung, Messgenauigkeit und ONNX-Export. 113 Tests.
 
-**In Arbeit:** das Rissmodell. Bis es liegt, läuft der Notbehelf und sagt es.
+**Es gibt ein Modell** — `crack_unet_r18`, 5 Epochen auf CPU, CrackSeg9k.
+Der Dienst lädt es, `/health` meldet `ok`, ein echtes Rissfoto ergibt in
+157 ms einen sauber verfolgten Befund. Die Zahlen stehen in
+`docs/Modell_und_Training.md` unter „Der erste Lauf".
+
+**Es ist ein Grundstand, kein Auslieferungsmodell.** Die Messgenauigkeit
+liegt bei 1,9 px Streuung auf einem typischen 6,2-px-Riss — bei 0,08 mm/px
+rund 0,15 mm. Für eine Entscheidung zwischen 0,2 und 0,3 mm ist das **zu
+grob**. Nicht die Nachbearbeitung ist schuld: auf synthetischen Rissen
+bekannter Breite misst dieselbe Kette auf unter 0,4 px genau. Es ist die
+Güte dieses Modells, und die kommt aus fünf Epochen auf einer CPU.
+
+**Eine belastbare absolute Genauigkeit gibt es nicht.** Gemessen wird gegen
+gezeichnete Masken; wo der Annotierende die Kante anders gesetzt hat als die
+Physik, steckt der Fehler schon in der Wahrheit. Für eine Aussage wie „misst
+auf 0,05 mm genau" braucht es einen Vergleich gegen ein Rissbreitenlineal an
+einem echten Bauteil. **Das gehört vor den ersten Feldeinsatz.**
 
 **Als Nächstes, in dieser Reihenfolge:**
 

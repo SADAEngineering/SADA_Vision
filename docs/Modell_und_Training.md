@@ -282,6 +282,74 @@ schon in der Wahrheit. Eine belastbare absolute Genauigkeit gibt nur ein
 Vergleich gegen ein Rissbreitenlineal oder ein Mikroskop an einem echten
 Bauteil — das steht aus.
 
+## Der erste Lauf — die Zahlen
+
+> 25.09.2026 · `crack_unet_r18` · 5 Epochen auf 8 CPU-Kernen, 3 h 24 min ·
+> CrackSeg9k, ungefiltert · U-Net mit ResNet-18, 256er-Ausschnitte
+
+**Training** (Prüfteil, je Epoche):
+
+| Epoche | tolerantes F1 | `width_bias` |
+|---|---|---|
+| 1 | 0,676 | 1,345 |
+| 2 | 0,753 | 1,229 |
+| 3 | 0,735 | 1,366 |
+| 4 | 0,755 | 1,350 |
+| **5** | **0,778** | 1,312 |
+
+Die Erkennung steigt stetig, die Breitenverzerrung bleibt bei rund 1,3 hängen.
+Genau so war es zu erwarten — siehe den Abschnitt zu `pos_weight` oben.
+
+**Schwellensuche** (Testteil, 500 Bilder). Das tolerante F1 ist über den
+ganzen Bereich fast flach, die Verzerrung fällt stetig:
+
+| Schwelle | tolerantes F1 | `width_bias` |
+|---|---|---|
+| 0,50 | 0,803 | 1,407 |
+| 0,75 | **0,808** (bestes Finden) | 1,285 |
+| 0,85 | 0,807 | 1,193 |
+| **0,93** | 0,797 (**gewählt**) | **1,059** |
+| 0,95 | 0,788 | 0,981 |
+
+Die Auswahlregel kostet 1,3 Prozentpunkte beim Finden und drückt die
+Verzerrung von **+28,5 auf +5,9 Prozent**. Für ein Messprodukt ist das der
+richtige Handel.
+
+**Messgenauigkeit** (Testteil, 374 Bilder, nur linienhafte Annotationen bis
+12 px, Schwelle 0,93):
+
+| Größe | typische Wahrheit | Versatz | Streuung (Median \|e\|) |
+|---|---|---|---|
+| mittlere Breite | 6,2 px | +1,13 px (+19 %) | **1,90 px** |
+| größte Breite | 16,9 px | −1,43 px (−11 %) | 5,01 px |
+| Länge | 432 px | −28,7 px (−7 %) | 65 px |
+
+26 von 400 annotierten Rissen nicht gefunden, **0 erfunden**.
+
+### Was diese Zahlen bedeuten — und was nicht
+
+**Die Kette steht.** Vom Foto bis zum Millimeterwert läuft alles, der Export
+stimmt auf 7,6 · 10⁻⁶ mit PyTorch überein, die Schwelle kommt im Dienst an,
+und auf einem echten Rissfoto kommt in 157 ms ein sauber verfolgter Befund
+heraus.
+
+**Die Messgenauigkeit reicht noch nicht.** 1,9 px Streuung auf einem
+typischen 6,2-px-Riss sind rund 30 Prozent. Bei 0,08 mm/px ist das ein
+Fehler von etwa 0,15 mm — für eine Entscheidung zwischen 0,2 und 0,3 mm
+**zu grob**. Das ist keine Schwäche der Nachbearbeitung: auf synthetischen
+Rissen bekannter Breite misst dieselbe Kette auf unter 0,4 px genau
+(`tests/test_width.py`). Es ist die Güte dieses Modells.
+
+Drei Hebel, in der Reihenfolge ihrer Wirkung:
+
+1. **Richtig trainieren.** 5 Epochen auf CPU gegen 60 auf einer GPU mit
+   384er-Ausschnitten und ResNet-34. Das ist der größte Sprung und kostet
+   zwei Stunden Rechenzeit.
+2. **Eigene Fotos.** Siehe oben: der Datensatz kennt euren Beton nicht, und
+   seine Risse sind im Mittel zwei- bis dreimal breiter als eure.
+3. **Näher heran.** Ein 0,2-mm-Riss muss über mehr als zwei Pixel gehen,
+   sonst ist jede Angabe eine Schätzung. Das ist Physik, kein Modellproblem.
+
 ## Ausliefern
 
 ```
