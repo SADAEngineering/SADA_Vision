@@ -1,0 +1,47 @@
+# SADA Vision - Trainings-Image
+#
+# Faehrt **nie** in Produktion. Hier liegt torch, hier liegen die Datensaetze,
+# hier laeuft der Export nach ONNX. Was der Dienst davon braucht, ist genau
+# eine Datei: das exportierte Netz.
+#
+# CPU-Variante. Fuer eine GPU-Kiste die Zeile mit dem Index auf die
+# passende CUDA-Fassung umstellen (siehe training/README.md).
+
+FROM python:3.12-slim-bookworm
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libglib2.0-0 \
+      libgomp1 \
+      git \
+      curl \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
+
+# torch zuerst und ausdruecklich als CPU-Rad: sonst zieht pip die
+# CUDA-Fassung mit rund 2,5 GB Treiberpaketen, die hier niemand braucht.
+RUN pip install --index-url https://download.pytorch.org/whl/cpu \
+      "torch==2.8.0" "torchvision==0.23.0"
+
+RUN pip install \
+      "segmentation-models-pytorch>=0.5" \
+      "albumentations>=1.4" \
+      "opencv-contrib-python-headless>=4.10" \
+      "scikit-image>=0.24" \
+      "scipy>=1.13" \
+      "numpy>=1.26,<3" \
+      "pillow>=10.4" \
+      "pyarrow>=17" \
+      "requests>=2.32" \
+      "tqdm>=4.66" \
+      "pyyaml>=6.0" \
+      "onnx>=1.16" \
+      "onnxruntime>=1.19"
+
+ENV PYTHONPATH=/work/src:/work
+WORKDIR /work
+
+CMD ["python", "training/train.py", "--help"]

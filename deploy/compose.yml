@@ -1,0 +1,42 @@
+# SADA Vision - allein lauffaehig, zum Entwickeln und Ausprobieren.
+#
+# Im Betrieb faehrt der Dienst **nicht** so, sondern als weiterer Eintrag in
+# TraceForms compose.onprem.yml, ohne `ports:` und nur im internen Netz -
+# siehe docs/TraceForm_Anbindung.md. Er hat keine Anmeldung.
+
+services:
+  vision:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: runtime
+    image: sada-vision:${VISION_TAG:-dev}
+    restart: unless-stopped
+    ports:
+      # Nur hier, nur zum Entwickeln. An 127.0.0.1 gebunden, damit der
+      # Dienst nicht versehentlich im Netz steht.
+      - "127.0.0.1:8080:8080"
+    environment:
+      SADAVISION_MODEL_DIR: /models
+      SADAVISION_CRACK_MODEL: ${VISION_CRACK_MODEL:-crack_unet_r18.onnx}
+      SADAVISION_LOG_JSON: "false"
+      SADAVISION_LOG_LEVEL: ${VISION_LOG_LEVEL:-INFO}
+      # Ohne Deckel nimmt sich jede Bibliothek alle Kerne und sie behindern
+      # sich gegenseitig. Muss zum Kern-Limit unten passen.
+      OMP_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "4"
+    volumes:
+      # Die Gewichte kommen von aussen, nicht ins Image. Nur lesend:
+      # der Dienst hat dort nichts zu schreiben.
+      - ../models:/models:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3

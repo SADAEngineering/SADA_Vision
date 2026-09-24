@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Visual Studio
+.vs/
+
+# Modellgewichte - gehoeren in die Registry, nicht in Git
+models/*
+!models/.gitkeep
+!models/*.json
+
+# Trainingsdaten und Laeufe
+data/
+runs/
+*.pt
+*.pth
+*.onnx
+
+# Betrieb
+deploy/.env
+*.log
+
+# Beispielbilder ausser den eingecheckten
+samples/*
+!samples/.gitkeep
+!samples/*.md

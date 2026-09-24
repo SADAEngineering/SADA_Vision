@@ -1,0 +1,28 @@
+# Der Lauf fuer eine GPU-Kiste (Colab, RunPod, eigene Karte ab 8 GB).
+# Rechnet rund zwei Stunden auf einer T4 und liefert deutlich mehr als der
+# CPU-Basislauf - das ist das Modell, das in Betrieb gehoert.
+name: crack_unet_r34_gpu
+
+data_root: data/crackseg9k/train
+test_root: data/crackseg9k/test
+out_dir: runs
+
+architecture: unet
+encoder: resnet34
+encoder_weights: imagenet
+
+image_size: 384
+batch_size: 16
+epochs: 60
+learning_rate: 0.0006
+weight_decay: 0.0001
+val_fraction: 0.08
+workers: 8
+seed: 42
+
+pos_weight: 4.0
+bce_weight: 1.0
+dice_weight: 1.0
+
+tolerance_px: 2
+threshold: 0.5

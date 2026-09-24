@@ -1,0 +1,31 @@
+# Basislauf fuer Risse - so eingestellt, dass er auf einer CPU in Stunden
+# statt Tagen durchlaeuft. Auf einer GPU: encoder auf resnet34 oder
+# efficientnet-b2, image_size auf 384, batch_size auf 16, epochs auf 60.
+name: crack_unet_r18
+
+data_root: data/crackseg9k/train
+test_root: data/crackseg9k/test
+out_dir: runs
+
+architecture: unet
+encoder: resnet18
+encoder_weights: imagenet
+
+image_size: 256
+batch_size: 16
+epochs: 14
+learning_rate: 0.0003
+weight_decay: 0.0001
+val_fraction: 0.08
+workers: 3
+seed: 42
+
+# Risse sind wenige Prozent der Pixel. Ohne Gegengewicht lernt das Netz,
+# ueberall Hintergrund zu sagen - und liegt damit in 97 Prozent der Faelle
+# richtig, ohne einen einzigen Riss gefunden zu haben.
+pos_weight: 4.0
+bce_weight: 1.0
+dice_weight: 1.0
+
+tolerance_px: 2
+threshold: 0.5
