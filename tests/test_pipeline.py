@@ -229,3 +229,40 @@ def test_verkleinerung_rechnet_koordinaten_zurueck(monkeypatch):
     # Grober als ohne Verkleinerung - aber der Verlauf muss stimmen.
     assert float(np.median(np.min(d, axis=1))) < 4.0
     assert any("verkleinert" in warning for warning in result.warnings)
+
+
+def test_gewoehnliches_handyfoto_wird_angenommen():
+    """48 Megapixel sind bei heutigen Telefonen normal, keine Bombe."""
+    from sada_vision.config import get_settings as _settings
+
+    assert _settings().max_image_pixels >= 50_000_000
+
+
+def test_viel_zu_grosses_bild_wird_abgelehnt(monkeypatch):
+    """Der Bombenschutz muss trotzdem greifen."""
+    import io as _io
+
+    from PIL import Image as _Image
+
+    from sada_vision.pipeline.preprocess import ImageRejected, decode
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "max_image_pixels", 1000)
+
+    buffer = _io.BytesIO()
+    _Image.new("RGB", (200, 200)).save(buffer, format="PNG")
+    with pytest.raises(ImageRejected):
+        decode(buffer.getvalue())
+
+
+def test_winziges_bild_wird_abgelehnt():
+    import io as _io
+
+    from PIL import Image as _Image
+
+    from sada_vision.pipeline.preprocess import ImageRejected, decode
+
+    buffer = _io.BytesIO()
+    _Image.new("RGB", (20, 20)).save(buffer, format="PNG")
+    with pytest.raises(ImageRejected, match="zu klein"):
+        decode(buffer.getvalue())

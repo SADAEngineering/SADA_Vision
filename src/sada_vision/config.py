@@ -31,7 +31,11 @@ class Settings(BaseSettings):
     onnx_threads: int = 0  # 0 = onnxruntime entscheidet
 
     # --- Bildverarbeitung -------------------------------------------------
-    max_image_pixels: int = 40_000_000  # Bombenschutz beim Dekodieren
+    # Bombenschutz beim Dekodieren. 100 Megapixel: eine Zip-Bombe hat
+    # Gigapixel, eine echte Kamera hoechstens ein paar Dutzend Megapixel -
+    # und 48 sind bei heutigen Telefonen normal. Bei 40 waere ein ganz
+    # gewoehnliches Handyfoto abgelehnt worden.
+    max_image_pixels: int = 100_000_000
     # Groesste Kante, auf die ein Bild vor der Segmentierung verkleinert wird.
     # 0 = nie verkleinern. Die Geometrie wird anschliessend zurueckgerechnet.
     max_edge_px: int = 4096
