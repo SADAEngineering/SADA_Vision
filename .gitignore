@@ -30,3 +30,7 @@ deploy/.env
 samples/*
 !samples/.gitkeep
 !samples/*.md
+
+# Die Testmodelle sind winzig und gehoeren dazu
+!tests/fixtures/*.onnx
+!tests/fixtures/*.json

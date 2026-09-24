@@ -1,0 +1,17 @@
+{
+  "name": "dummy-dark",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "tile": 128,
+  "tile_overlap": 32,
+  "threshold": 0.5,
+  "note": "Testdoppel - dunkle Pixel gelten als Riss."
+}
