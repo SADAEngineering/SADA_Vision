@@ -4,6 +4,10 @@
 # TraceForms compose.onprem.yml, ohne `ports:` und nur im internen Netz -
 # siehe docs/TraceForm_Anbindung.md. Er hat keine Anmeldung.
 
+# Ohne das heisst das Projekt nach dem Ordner, also "deploy" - und taucht
+# in "docker compose ls" und jedem Containernamen so auf.
+name: sada-vision
+
 services:
   vision:
     build:
