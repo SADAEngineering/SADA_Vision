@@ -16,7 +16,8 @@ def _line_mask(h=100, w=200, thickness=5) -> np.ndarray:
 
 
 def test_gerade_linie_ergibt_einen_ast():
-    branches, nodes = geometry.skeleton_branches(_line_mask())
+    skelett = geometry.skeleton_branches(_line_mask())
+    branches, nodes = skelett.branches, skelett.branch_count
     assert nodes == 0
     # Enden zaehlen als Knoten, der Ast dazwischen ist einer.
     assert len(branches) == 1
@@ -27,13 +28,15 @@ def test_t_form_ergibt_drei_aeste_und_einen_knoten():
     m = np.zeros((120, 120), dtype=bool)
     m[58:62, 10:110] = True   # Stamm waagerecht
     m[60:110, 58:62] = True   # Ast nach unten
-    branches, nodes = geometry.skeleton_branches(m)
+    skelett = geometry.skeleton_branches(m)
+    branches, nodes = skelett.branches, skelett.branch_count
     assert nodes >= 1
     assert len(branches) == 3
 
 
 def test_leere_maske_liefert_nichts():
-    branches, nodes = geometry.skeleton_branches(np.zeros((50, 50), dtype=bool))
+    skelett = geometry.skeleton_branches(np.zeros((50, 50), dtype=bool))
+    branches, nodes = skelett.branches, skelett.branch_count
     assert branches == []
     assert nodes == 0
 
@@ -45,7 +48,8 @@ def test_ring_wird_geschlossen_zurueckgegeben():
     cv2.circle(m.astype(np.uint8), (60, 60), 40, 1, 4)
     ring = np.zeros((120, 120), dtype=np.uint8)
     cv2.circle(ring, (60, 60), 40, 1, 4)
-    branches, nodes = geometry.skeleton_branches(ring.astype(bool))
+    skelett = geometry.skeleton_branches(ring.astype(bool))
+    branches, nodes = skelett.branches, skelett.branch_count
     assert len(branches) >= 1
     longest = max(branches, key=lambda b: b.shape[0])
     assert longest.shape[0] > 100

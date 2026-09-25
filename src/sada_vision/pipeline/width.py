@@ -162,6 +162,37 @@ def _first_crossing(
     return np.maximum(crossing, 0.0)
 
 
+def junction_mask(
+    points: np.ndarray,
+    junctions: np.ndarray,
+    widths_px: np.ndarray,
+    radius_factor: float = 1.5,
+    radius_floor: float = 2.0,
+) -> np.ndarray:
+    """Markiert die Stuetzstellen, an denen die Breite nicht gilt.
+
+    An einer Verzweigung misst jedes Verfahren zu breit, und zwar aus einem
+    geometrischen Grund: in eine Gabelung passt ein groesserer Kreis als in
+    den Riss, und ein Lot quer zum einen Ast schneidet den anderen. Der
+    Effekt reicht etwa eine Rissbreite weit - deshalb haengt der Radius an
+    der dort gemessenen Breite und ist keine feste Zahl.
+
+    Die Werte werden **nicht geloescht**. Sie stehen weiter in der Antwort,
+    nur zaehlen sie nicht in Hoechstwert, Mittel und Perzentil. Wer sie
+    zeichnen will, kann das; wer eine Rissbreite braucht, nimmt sie nicht.
+    """
+    n = points.shape[0]
+    if n == 0 or junctions is None or len(junctions) == 0:
+        return np.zeros(n, dtype=bool)
+
+    junctions = np.asarray(junctions, dtype=np.float64).reshape(-1, 2)
+    abstand = np.linalg.norm(
+        points[:, None, :].astype(np.float64) - junctions[None, :, :], axis=2
+    ).min(axis=1)
+    radius = np.maximum(widths_px.astype(np.float64) * radius_factor, radius_floor)
+    return abstand <= radius
+
+
 def to_millimetres(width_px: np.ndarray, mm_per_px: np.ndarray) -> np.ndarray:
     """-1 bleibt -1: unbekannter Massstab wird nicht geraten."""
     out = np.where(mm_per_px > 0, width_px * mm_per_px, -1.0)

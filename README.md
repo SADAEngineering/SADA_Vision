@@ -78,6 +78,7 @@ Unsinn misst, ist schlimmer. Also: er läuft, und er sagt Bescheid.
       "pattern": "branched", "orientation_class": "vertical",
       "width_max_mm": 0.277, "width_mean_mm": 0.183, "length_mm": 98.4,
       "tortuosity": 1.21, "branch_count": 2, "severity": "moderate",
+      "touches_border": false, "width_samples_excluded": 10,
       "paths": { "items": [ {
           "point_count": 146,
           "path_yx":  [312.5, 88.0, 314.1, 89.2, ...],
@@ -146,7 +147,7 @@ im Text, sondern als Test in `tests/test_width.py`.
 ## Entwickeln
 
 ```bash
-# Tests (113 Stück, laufen im Container)
+# Tests (129 Stück, laufen im Container)
 docker build -f deploy/Dockerfile --target dev -t sada-vision:test .
 docker run --rm -v "$(pwd -W):/app" sada-vision:test pytest -q
 

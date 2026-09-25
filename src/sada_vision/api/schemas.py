@@ -67,6 +67,14 @@ class PathDto(_Dto):
     )
     width_px: list[float] = Field(description="Breite quer zum Verlauf, je Stuetzstelle")
     width_mm: list[float] = Field(description="-1 je Stelle, wenn kein Massstab")
+    width_at_junction: list[bool] = Field(
+        default_factory=list,
+        description=(
+            "Seit 1.1. True, wo die Stuetzstelle an einer Verzweigung liegt: "
+            "dort misst jedes Verfahren zu breit. Der Wert steht trotzdem da, "
+            "zaehlt aber nicht in width_max/mean/p95 des Befundes."
+        ),
+    )
     length_px: float
     length_mm: float = -1.0
     is_loop: bool = False
@@ -93,6 +101,20 @@ class InstanceDto(_Dto):
     )
     tortuosity: float = Field(description="Weglaenge / Luftlinie, 1,0 = gerade")
     branch_count: int = 0
+    touches_border: bool = Field(
+        default=False,
+        description=(
+            "Seit 1.1. Der Riss laeuft aus dem Bild heraus. length und bbox "
+            "sind dann Untergrenzen, keine Messwerte."
+        ),
+    )
+    width_samples_excluded: int = Field(
+        default=0,
+        description=(
+            "Seit 1.1. So viele Stuetzstellen lagen an einer Verzweigung und "
+            "sind nicht in die Breitenstatistik eingegangen."
+        ),
+    )
     severity: str = Field(
         description='"hairline" | "fine" | "moderate" | "wide" | "severe" | "unknown"'
     )

@@ -13,6 +13,7 @@ Riss ohne Verzweigung hat genau einen Ast.
 from __future__ import annotations
 
 import inspect
+from typing import NamedTuple
 
 import cv2
 import numpy as np
@@ -75,15 +76,27 @@ def _neighbour_count(skel: np.ndarray) -> np.ndarray:
     )
 
 
-def skeleton_branches(component: np.ndarray) -> tuple[list[np.ndarray], int]:
+class Skeleton(NamedTuple):
+    """Das zerlegte Skelett einer Instanz.
+
+    ``junctions`` sind die Mittelpunkte der Kreuzungen in ``(y, x)``. Sie
+    werden gebraucht, weil die Breitenmessung dort systematisch zu gross
+    ausfaellt: in eine Gabelung passt ein groesserer Kreis als in den Riss.
+    """
+
+    branches: list[np.ndarray]
+    branch_count: int
+    junctions: np.ndarray       # (M, 2), leer bei einem Riss ohne Verzweigung
+
+
+def skeleton_branches(component: np.ndarray) -> Skeleton:
     """Skelettiert eine Instanz und zerlegt das Skelett in Aeste.
 
-    Rueckgabe: Liste geordneter ``(N, 2)``-Punktfolgen in ``(y, x)`` relativ
-    zum Zuschnitt, dazu die Zahl der Verzweigungsknoten.
+    Die Punktfolgen sind geordnet, in ``(y, x)`` und relativ zum Zuschnitt.
     """
     skel = skeletonize(component)
     if not skel.any():
-        return [], 0
+        return Skeleton([], 0, np.zeros((0, 2), dtype=np.float32))
 
     nb = _neighbour_count(skel)
     nb = np.where(skel, nb, 0)
@@ -99,14 +112,23 @@ def skeleton_branches(component: np.ndarray) -> tuple[list[np.ndarray], int]:
     _clusters, cluster_of = cv2.connectedComponents(
         node_mask.astype(np.uint8), connectivity=8
     )
-    branch_count = int(
-        len(
-            {
-                int(cluster_of[y, x])
-                for y, x in zip(*np.nonzero(branch_pixels), strict=True)
-            }
-        )
+    kreuzungen = sorted(
+        {
+            int(cluster_of[y, x])
+            for y, x in zip(*np.nonzero(branch_pixels), strict=True)
+        }
     )
+    branch_count = len(kreuzungen)
+
+    # Je Kreuzung ihr Schwerpunkt - dort ist die Breitenmessung unbrauchbar,
+    # und zwar im Umkreis von etwa einer Rissbreite.
+    junctions = np.array(
+        [
+            np.argwhere(cluster_of == kennung).mean(axis=0)
+            for kennung in kreuzungen
+        ],
+        dtype=np.float32,
+    ).reshape(-1, 2)
 
     h, w = skel.shape
     node_set = {(int(y), int(x)) for y, x in zip(*np.nonzero(node_mask), strict=True)}
@@ -181,7 +203,7 @@ def skeleton_branches(component: np.ndarray) -> tuple[list[np.ndarray], int]:
             path.append(path[0])  # Ring schliessen
             branches.append(np.array(path, dtype=np.float32))
 
-    return branches, branch_count
+    return Skeleton(branches, branch_count, junctions)
 
 
 def polyline_length(points: np.ndarray) -> float:
@@ -229,6 +251,41 @@ def simplify_rdp(points: np.ndarray, epsilon: float) -> np.ndarray:
             stack.append((i0, i0 + idx))
             stack.append((i0 + idx, i1))
     return points[keep]
+
+
+def resample_uniform(points: np.ndarray, step_px: float) -> np.ndarray:
+    """Tastet den Verlauf in **festem Abstand** ab.
+
+    Das ist der Unterschied zwischen einer gezeichneten Linie und einer
+    Messreihe. Ramer-Douglas-Peucker optimiert die *Form*: er laesst Punkte
+    stehen, wo die Linie knickt, und wirft sie weg, wo sie gerade laeuft.
+    Fuer das Zeichnen ist das richtig - fuer das Messen falsch, denn auf
+    einem geraden Stueck bleiben dann zwei Stuetzstellen ueber vierzig
+    Pixel, und die breiteste Stelle dazwischen sieht niemand.
+
+    Abgetastet wird entlang des **rohen** Skelettpfades, nicht entlang der
+    vereinfachten Linie: sonst waeren die Punkte zwar gleichmaessig
+    verteilt, lagen aber neben dem Riss, weil die Vereinfachung Kurven
+    abschneidet.
+    """
+    n = points.shape[0]
+    if n < 2 or step_px <= 0:
+        return points
+
+    schritte = np.hypot(np.diff(points[:, 0]), np.diff(points[:, 1]))
+    weg = np.concatenate([[0.0], np.cumsum(schritte)])
+    gesamt = float(weg[-1])
+    if gesamt < step_px:
+        # Kuerzer als ein Schritt: Anfang und Ende genuegen.
+        return points[[0, -1]]
+
+    # Anfang und Ende bleiben immer stehen - sie sind die Enden des Risses.
+    anzahl = max(2, int(round(gesamt / step_px)) + 1)
+    ziel = np.linspace(0.0, gesamt, anzahl)
+    return np.stack(
+        [np.interp(ziel, weg, points[:, 0]), np.interp(ziel, weg, points[:, 1])],
+        axis=1,
+    ).astype(np.float32)
 
 
 def resample(points: np.ndarray, max_points: int) -> np.ndarray:

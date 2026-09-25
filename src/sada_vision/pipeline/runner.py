@@ -95,6 +95,7 @@ def analyse_crack(
             threshold=threshold,
             method=method,
             settings=settings,
+            work_shape=prob.shape[:2],
         )
         if inst is not None:
             instances.append(inst)
@@ -103,6 +104,14 @@ def analyse_crack(
     instances.sort(key=lambda i: (i.width_max_px, i.length_px), reverse=True)
     for new_id, inst in enumerate(instances):
         inst.instance_id = new_id
+
+    angeschnitten = sum(1 for i in instances if i.touches_border)
+    if angeschnitten:
+        warnings.append(
+            f"{angeschnitten} von {len(instances)} Befunden beruehren den "
+            "Bildrand und laufen dort weiter - deren Laenge und Ausdehnung "
+            "sind Untergrenzen, keine Messwerte (touches_border)."
+        )
 
     if not segmenter.info.trained:
         warnings.append(segmenter.info.note)
@@ -161,37 +170,54 @@ def _build_instance(
     threshold: float,
     method: str,
     settings,
+    work_shape: tuple[int, int],
 ) -> CrackInstance | None:
     y0, x0, y1, x1 = bbox
-    branches, branch_count = geometry.skeleton_branches(sub_mask)
-    if not branches:
+    skeleton = geometry.skeleton_branches(sub_mask)
+    if not skeleton.branches:
         return None
+    branch_count = skeleton.branch_count
 
     prob_crop = prob[y0:y1, x0:x1]
     dist_crop = dist[y0:y1, x0:x1]
 
     paths: list[Polyline] = []
-    all_widths: list[np.ndarray] = []
+    gueltige_px: list[np.ndarray] = []
+    gueltige_mm: list[np.ndarray] = []
+    ausgenommen = 0
     total_length_px = 0.0
 
-    for raw in branches:
+    for raw in skeleton.branches:
         if geometry.polyline_length(raw) < settings.min_branch_length_px:
             continue
 
-        simplified = geometry.simplify_rdp(raw, settings.rdp_epsilon_px)
-        simplified = geometry.resample(simplified, settings.max_points_per_path)
-        if simplified.shape[0] < 2:
+        # Gleichmaessig abtasten statt nach Form vereinfachen: sonst bleiben
+        # auf einem geraden Stueck zwei Stuetzstellen ueber vierzig Pixel,
+        # und die breiteste Stelle dazwischen sieht niemand.
+        sampled = geometry.resample_uniform(raw, settings.path_step_px)
+        sampled = geometry.resample(sampled, settings.max_points_per_path)
+        if sampled.shape[0] < 2:
             continue
 
         if method == "distance_transform":
-            w_px_local = width.widths_from_distance(simplified, dist_crop)
+            w_px_local = width.widths_from_distance(sampled, dist_crop)
         else:
             w_px_local = width.widths_perpendicular(
-                simplified, prob_crop, dist_crop, threshold
+                sampled, prob_crop, dist_crop, threshold
             )
 
+        # An einer Verzweigung misst jedes Verfahren zu breit. Die Werte
+        # bleiben in der Antwort, gehen aber nicht in die Statistik ein.
+        an_kreuzung = width.junction_mask(
+            sampled,
+            skeleton.junctions,
+            w_px_local,
+            radius_factor=settings.junction_radius_factor,
+        )
+        ausgenommen += int(np.count_nonzero(an_kreuzung))
+
         # Zuschnitt -> Arbeitsbild -> Originalbild
-        points = simplified + np.array([y0, x0], dtype=np.float32)
+        points = sampled + np.array([y0, x0], dtype=np.float32)
         points = points * factor
         w_px = w_px_local * factor
 
@@ -204,21 +230,31 @@ def _build_instance(
                 points_yx=points.astype(np.float32),
                 width_px=w_px.astype(np.float32),
                 width_mm=w_mm.astype(np.float32),
+                at_junction=an_kreuzung,
                 length_px=length_px,
                 length_mm=width.length_mm(points, mm_per_px),
                 is_loop=bool(np.allclose(points[0], points[-1])),
             )
         )
-        all_widths.append(w_px)
+        gueltige_px.append(w_px[~an_kreuzung])
+        gueltige_mm.append(w_mm[~an_kreuzung])
         total_length_px += length_px
 
     if not paths:
         return None
 
-    widths_all = np.concatenate(all_widths, axis=0)
+    widths_all = np.concatenate(gueltige_px) if gueltige_px else np.zeros(0)
+    mm_all = np.concatenate(gueltige_mm) if gueltige_mm else np.zeros(0)
+
+    # Ein Riss, der *nur* aus Kreuzungsnaehe besteht (ein kurzes Stueck
+    # zwischen zwei Gabelungen), haette sonst gar keine Breite. Dann lieber
+    # die verzerrten Werte als gar keine - aber alle Stellen gelten dann als
+    # ausgenommen, und das steht in der Antwort.
+    if widths_all.size == 0:
+        widths_all = np.concatenate([p.width_px for p in paths])
+        mm_all = np.concatenate([p.width_mm for p in paths])
 
     w_max_px, w_mean_px, w_p95_px = classify.summarise_widths(widths_all)
-    mm_all = np.concatenate([p.width_mm for p in paths])
     w_max_mm, w_mean_mm, w_p95_mm = classify.summarise_widths(mm_all)
 
     lengths_mm = [p.length_mm for p in paths]
@@ -230,6 +266,13 @@ def _build_instance(
 
     bbox_o = (y0 * factor, x0 * factor, y1 * factor, x1 * factor)
     bbox_area = max((y1 - y0) * (x1 - x0), 1) * factor * factor
+
+    # Beruehrt der Riss den Bildrand, laeuft er dort weiter. Laenge und
+    # Ausdehnung sind dann Untergrenzen - das muss der Aufrufer wissen,
+    # sonst traegt er eine Zahl ins Protokoll, die nur die Bildkante misst.
+    touches_border = bool(
+        y0 == 0 or x0 == 0 or y1 >= work_shape[0] or x1 >= work_shape[1]
+    )
 
     orientation = geometry.principal_orientation(longest.points_yx)
     inst = CrackInstance(
@@ -243,6 +286,8 @@ def _build_instance(
         orientation_class=classify.orientation_class_of(orientation),
         tortuosity=geometry.tortuosity(longest.points_yx),
         branch_count=branch_count,
+        touches_border=touches_border,
+        width_samples_excluded=ausgenommen,
         width_max_px=w_max_px,
         width_mean_px=w_mean_px,
         width_p95_px=w_p95_px,

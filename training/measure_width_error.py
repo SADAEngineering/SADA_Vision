@@ -45,7 +45,7 @@ def measure(mask: np.ndarray, prob: np.ndarray, threshold: float) -> dict | None
     total_length = 0.0
 
     for sub_mask, (y0, x0, y1, x1), _area in comps:
-        branches, _nodes = geometry.skeleton_branches(sub_mask)
+        branches = geometry.skeleton_branches(sub_mask).branches
         prob_crop = prob[y0:y1, x0:x1]
         dist_crop = dist[y0:y1, x0:x1]
         for raw in branches:

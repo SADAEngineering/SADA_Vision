@@ -7,10 +7,11 @@ der später in TraceForm und in die AR-App einrückt.
 Python 3.12 · FastAPI · PyTorch (nur Training) · ONNX Runtime (Betrieb) ·
 OpenCV · scikit-image · U-Net aus `segmentation_models_pytorch`
 
-> Fassung 1.0, 24.09.2026 · übergeordnet: SADA-Gesamthandbuch
+> Fassung 1.1, 25.09.2026 · übergeordnet: SADA-Gesamthandbuch
 >
-> Erster Stand. Der Dienst läuft, der Vertrag steht, das Modell ist in Arbeit.
-> Was noch fehlt, steht unter „Wo wir stehen".
+> Der Dienst läuft, der Vertrag steht bei 1.1, ein erstes Modell ist da.
+> Was es noch nicht kann, steht unter „Wo wir stehen" - und das gehört
+> gelesen, bevor jemand eine Rissbreite aus diesem Dienst weitergibt.
 
 ## Was das ist
 
@@ -27,7 +28,7 @@ irgendwann auch für ein anderes Produkt arbeiten.
 
 | Anwendungsfall | Stand | Aufgabe im Vertrag |
 |---|---|---|
-| **Risse im Beton** | gebaut, Modell in Arbeit | `crack` |
+| **Risse im Beton** | gebaut, erstes Modell in Betrieb | `crack` |
 | Schrauben | geplant | `bolt` |
 | Korrosion | geplant | `corrosion` |
 
@@ -64,7 +65,7 @@ ausschließlich in `api/schemas.py`, die Übersetzung ausschließlich in
 `api/mapping.py`. Wer in `pipeline/` ein DTO importiert, hat die Grenze
 gerissen.
 
-## Die acht Regeln
+## Die neun Regeln
 
 **1 · Der API-Vertrag ist bindend und nur additiv.** Felder hinzufügen ja,
 umbenennen oder entfernen nein — dieselbe Regel und derselbe Grund wie in
@@ -117,7 +118,32 @@ das. Das lotrechte Verfahren interpoliert den Rand zwischen zwei
 Abtastpunkten und ist deshalb die Vorgabe. `distance_transform` bleibt als
 schnelle Alternative erreichbar.
 
-**8 · Was der Dienst nicht weiß, sagt er nicht.** Die Einordnung (`linear`,
+Dazu gehören zwei Dinge, die eine Zahl erst zum Messwert machen:
+
+**Die Stützstellen liegen in festem Abstand**, nicht dort, wo die Linie
+knickt. Eine Vereinfachung nach Form (Ramer-Douglas-Peucker) ist fürs
+*Zeichnen* richtig und fürs *Messen* falsch: auf einem geraden Stück bleiben
+dann zwei Punkte über vierzig Pixel stehen, und die breiteste Stelle
+dazwischen sieht niemand. Abgetastet wird entlang des **rohen** Skelettpfades
+— eine vereinfachte Linie schneidet Kurven ab, und die Punkte lägen neben
+dem Riss.
+
+**An einer Verzweigung gilt keine Breite.** In eine Gabelung passt ein
+größerer Kreis als in den Riss, und ein Lot quer zum einen Ast schneidet den
+anderen; der Effekt reicht etwa eine Rissbreite weit und geht immer in
+dieselbe Richtung. Diese Stellen zählen nicht in `width_max/mean/p95`,
+bleiben aber in der Antwort und sind in `width_at_junction` markiert. An
+einem gemessenen Beispiel waren es 10 von 167 Stützstellen und 11 Prozent
+Unterschied im Höchstwert. **Das ist wichtig, weil `width_max` die
+Einstufung bestimmt** — die empfindlichste Zahl trägt die Entscheidung.
+
+**8 · Was nur teilweise im Bild ist, wird nicht als Ganzes gemessen.**
+Berührt ein Riss den Bildrand, läuft er dort weiter. `length_mm` und
+`bbox_yxyx` messen dann die Bildkante mit, nicht den Riss. Das steht als
+`touches_border` in der Antwort und als Warnung daneben — wer es überliest,
+protokolliert den Bildausschnitt statt des Befundes.
+
+**9 · Was der Dienst nicht weiß, sagt er nicht.** Die Einordnung (`linear`,
 `branched`, `map`, `horizontal`/`vertical`/`diagonal`, das Breitenband) ist
 **abgeleitete Geometrie, kein Gutachten**. Die Ursache eines Risses —
 Schwinden, Setzung, Bewehrungskorrosion, Zwang — folgt daraus nicht, und die
@@ -132,7 +158,7 @@ Riss, dessen Breite man vorher kennt. Auf echten Fotos weiß das niemand.
 `tests/synthetic.py` zeichnet sie — vierfach vergrößert und dann verkleinert,
 damit eine Breite von 2,5 Pixeln überhaupt darstellbar ist.
 
-Sechs Gruppen müssen existieren:
+Sieben Gruppen müssen existieren:
 
 1. **Messung gegen bekannte Breite** (`test_width.py`) — und der Nachweis,
    dass das lotrechte Verfahren genauer ist als die Distanztransformation.
@@ -152,7 +178,13 @@ Sechs Gruppen müssen existieren:
    Rechenweg: dunkle Pixel gelten als Riss. Die teuerste Fehlerklasse ist
    hier die **falsche Normierung** — sie fällt nicht als Fehler auf,
    sondern als schlechte Erkennung, Monate später.
-6. **Kachelung und Last** (`test_tiling.py`, `test_workload.py`) — jeder
+6. **Messgüte** (`test_messguete.py`) — die drei Dinge, die eine Zahl vom
+   Messwert trennen: Verzweigungen zählen nicht in die Breitenstatistik,
+   ein angeschnittener Riss sagt es, und die Breite wird in festem
+   Abstand abgetastet. Der Kern ist ein synthetisches T, das **überall
+   gleich breit** gezeichnet ist: vorher lag sein Höchstwert an der
+   Gabelung, jetzt bei der gezeichneten Breite.
+7. **Kachelung und Last** (`test_tiling.py`, `test_workload.py`) — jeder
    Pixel genau einmal abgedeckt, keine Naht, und der Dienst bleibt
    während einer Rechnung ansprechbar. Beides sind Fehler, die nur unter
    Last auftreten und die eine einzelne Anfrage nie bemerkt.
@@ -176,7 +208,7 @@ Damit keiner den anderen verdeckt — dieselbe Regel wie in TraceForm:
 
 | Job | Prüft |
 |---|---|
-| `tests` | ruff und die 116 Tests im Testabbild |
+| `tests` | ruff und die 129 Tests im Testabbild |
 | `dienst` | Das Dienst-Image **und den laufenden Container** |
 | `compose` | Syntax, Variablenauflösung, und dass kein Port offen steht |
 
@@ -271,7 +303,7 @@ Zwei Besonderheiten dieses Repos:
 
 **Gebaut und geprüft:** Dienst, Vertrag, Pipeline, Breitenmessung, alle drei
 Maßstabswege, Markervorlage, Vorschaubild, Container, Trainingsweg samt
-Datensatz, Bewertung, Messgenauigkeit und ONNX-Export. 113 Tests.
+Datensatz, Bewertung, Messgenauigkeit und ONNX-Export. 129 Tests.
 
 **Es gibt ein Modell** — `crack_unet_r18`, 5 Epochen auf CPU, CrackSeg9k.
 Der Dienst lädt es, `/health` meldet `ok`, ein echtes Rissfoto ergibt in

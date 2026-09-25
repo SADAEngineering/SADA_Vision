@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     min_component_area_px: int = 40
     min_branch_length_px: float = 12.0
     rdp_epsilon_px: float = 1.0
+    # Abstand der Stuetzstellen entlang des Verlaufs. Gleichmaessig statt
+    # nach Form vereinfacht - sonst wird die Breite nur dort gemessen, wo
+    # die Linie zufaellig knickt.
+    path_step_px: float = 3.0
+    # Wie weit die Verzerrung um eine Verzweigung reicht, als Vielfaches der
+    # dort gemessenen Breite.
+    junction_radius_factor: float = 1.5
     width_method: str = "perpendicular"  # "perpendicular" | "distance_transform"
 
     # --- Grenzen ----------------------------------------------------------

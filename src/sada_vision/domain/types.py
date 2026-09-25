@@ -91,6 +91,9 @@ class Polyline:
     points_yx: np.ndarray         # (N, 2) float32, Originalbild-Pixel
     width_px: np.ndarray          # (N,) float32, Breite quer zum Verlauf
     width_mm: np.ndarray          # (N,) float32, -1 wo unbekannt
+    # True, wo die Stuetzstelle an einer Verzweigung liegt: der Wert steht
+    # da, gilt aber nicht. Siehe width.junction_mask.
+    at_junction: np.ndarray | None = None
     length_px: float = 0.0
     length_mm: float = -1.0
     is_loop: bool = False
@@ -116,6 +119,12 @@ class CrackInstance:
     orientation_class: str = "unknown"
     tortuosity: float = 1.0
     branch_count: int = 0
+    # Der Riss laeuft aus dem Bild heraus: Laenge und Ausdehnung sind dann
+    # Untergrenzen, keine Messwerte.
+    touches_border: bool = False
+    # Wie viele Stuetzstellen wegen einer Verzweigung nicht in die
+    # Breitenstatistik eingegangen sind.
+    width_samples_excluded: int = 0
 
     width_max_px: float = 0.0
     width_mean_px: float = 0.0

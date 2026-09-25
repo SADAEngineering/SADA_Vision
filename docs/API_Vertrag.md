@@ -1,6 +1,11 @@
 # Der API-Vertrag
 
-> Fassung 1.0 · Stichtag 24.09.2026 · ab hier **nur additiv**
+> Fassung 1.1 · Stichtag 24.09.2026 · ab hier **nur additiv**
+>
+> **1.1 (25.09.2026)** — drei Felder dazu, kein bestehendes angefasst:
+> `touches_border` und `width_samples_excluded` je Befund,
+> `width_at_junction` je Ast. Aufrufer der Fassung 1.0 laufen unverändert
+> weiter; wer misst, sollte sie lesen.
 
 Was hier steht, ist der Vertrag auf dem Draht. Er gilt für alle Aufrufer:
 TraceForm, die Unity-AR-App, der Connector, Partnersysteme.
@@ -91,7 +96,7 @@ vergibt der Dienst eine.
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "task": "crack",
   "request_id": "5f3c…",
   "image":  { "width": 4032, "height": 3024, "exif_rotated": false },
@@ -119,6 +124,8 @@ vergibt der Dienst eine.
 | `orientation_deg` | float | Hauptrichtung des längsten Astes |
 | `orientation_class` | string | `horizontal` \| `vertical` \| `diagonal` \| `unknown` |
 | `tortuosity` | float | Weglänge / Luftlinie. `1,0` = gerade |
+| `touches_border` | bool | **1.1** — der Riss läuft aus dem Bild heraus. `length` und `bbox` sind dann Untergrenzen, keine Messwerte |
+| `width_samples_excluded` | int | **1.1** — so viele Stützstellen lagen an einer Verzweigung und zählen nicht in die Breitenstatistik |
 | `branch_count` | int | Verzweigungsknoten |
 | `severity` | string | `hairline` \| `fine` \| `moderate` \| `wide` \| `severe` \| `unknown` |
 | `width_max_px`, `width_mean_px`, `width_p95_px` | float | Breite in Pixeln |
@@ -135,6 +142,7 @@ vergibt der Dienst eine.
 | `path_yx` | float[2N] | `[y0, x0, y1, x1, …]` |
 | `width_px` | float[N] | Breite **an jeder Stützstelle**, quer zum Verlauf |
 | `width_mm` | float[N] | dieselbe in Millimetern, `-1` wo unbekannt |
+| `width_at_junction` | bool[N] | **1.1** — `true`, wo die Stelle an einer Verzweigung liegt: der Wert steht da, gilt aber nicht |
 | `length_px`, `length_mm` | float | Länge dieses Astes |
 | `is_loop` | bool | Anfang = Ende |
 
@@ -161,6 +169,51 @@ Rissbreite hängt von der Expositionsklasse ab — DIN EN 1992-1-1/NA nennt
 in `config.py` (`SEVERITY_BANDS_MM`) und sind änderbar, ohne den Vertrag zu
 brechen.
 
+## Welcher Breitenwert gilt
+
+Drei Zahlen stehen je Befund, und sie sind unterschiedlich belastbar.
+
+**`width_p95_mm` ist die brauchbarste.** Sie nimmt die breiteste Stelle
+mit, ohne von einem einzelnen Ausreißer bestimmt zu werden.
+
+**`width_max_mm` ist die empfindlichste.** Sie ist ein einzelner Messwert
+aus hunderten, und der breiteste Punkt ist genau der, an dem die
+Segmentierung am ehesten danebenliegt. Seit 1.1 sind die Verzweigungen
+heraus, aber ein Rest bleibt. **Und sie bestimmt `severity`** — wer eine
+Einstufung speichert, speichert damit die empfindlichste Zahl.
+
+**`width_mean_mm`** ist der Mittelwert über den ganzen Riss. Er ist stabil,
+beantwortet aber nicht die Frage nach der kritischen Stelle.
+
+### Verzweigungen
+
+An einer Kreuzung misst **jedes** Verfahren zu breit, aus einem
+geometrischen Grund: in eine Gabelung passt ein größerer Kreis als in den
+Riss, und ein Lot quer zum einen Ast schneidet den anderen. Der Effekt
+reicht etwa eine Rissbreite weit.
+
+Seit 1.1 zählen diese Stellen nicht mehr in `width_max`, `width_mean` und
+`width_p95`. Sie stehen weiter in `width_px` / `width_mm` — wer sie
+zeichnen will, kann das —, sind aber in `width_at_junction` markiert, und
+`width_samples_excluded` sagt, wie viele es waren.
+
+An einem gemessenen Beispiel: bei einem verzweigten Riss mit 167
+Stützstellen lagen 10 an einer Kreuzung; der Höchstwert über alle war
+1,40 mm, ohne sie 1,25 mm. **Elf Prozent**, immer in dieselbe Richtung.
+
+### Abtastung
+
+Die Breite wird an jeder Stützstelle gemessen, und die Stützstellen liegen
+in **festem Abstand** entlang des Verlaufs (Vorgabe 3 px, einstellbar über
+`SADAVISION_PATH_STEP_PX`). Das ist Absicht: eine Vereinfachung nach Form
+lässt auf einem geraden Stück zwei Punkte über vierzig Pixel stehen, und
+die breiteste Stelle dazwischen sieht dann niemand.
+
+Praktisch heißt das: `point_count` wächst mit der Länge, nicht mit der
+Kurvigkeit. Ein Riss von 500 px hat rund 167 Stützstellen. Wer nur die
+Linie zeichnen will und die Datenmenge drücken muss, nimmt
+`include_paths=false` und die Kennzahlen.
+
 ## Zwei Felder, die man nicht überlesen darf
 
 **`model.trained`.** Ist es `false`, läuft der Notbehelf ohne gelernte
@@ -171,6 +224,11 @@ sichtbar machen oder die Annahme verweigern.**
 
 **`scale.known`.** Ist es `false`, sind alle `*_mm` gleich `-1`. Dann gibt es
 keine Rissbreite in Millimetern, und `severity` ist `unknown`.
+
+**`touches_border`** (seit 1.1). Ist es `true`, läuft der Riss aus dem Bild
+heraus. `length_mm` und `bbox_yxyx` messen dann die Bildkante mit, nicht den
+Riss — es sind Untergrenzen. Wer sie als Länge protokolliert, protokolliert
+den Bildausschnitt.
 
 ## Fehler
 
@@ -196,6 +254,7 @@ Einheitliche Form, englisch formuliert (sie stehen in der Maske):
     public float[] path_yx;      // [y0,x0,y1,x1,…]
     public float[] width_px;
     public float[] width_mm;
+    public bool[]  width_at_junction;   // seit 1.1 - dort gilt die Breite nicht
     public float length_px;
     public float length_mm;
     public bool  is_loop;
@@ -212,6 +271,8 @@ Einheitliche Form, englisch formuliert (sie stehen in der Maske):
     public string orientation_class;
     public float  tortuosity;
     public int    branch_count;
+    public bool   touches_border;          // seit 1.1
+    public int    width_samples_excluded;  // seit 1.1
     public string severity;
     public float  width_max_mm;
     public float  length_mm;
@@ -235,6 +296,10 @@ for (int i = 0; i < path.point_count; i++) {
     float y = path.path_yx[2 * i];
     float x = path.path_yx[2 * i + 1];
     float w = path.width_mm[i];   // -1 = unbekannt
+
+    // An einer Verzweigung steht ein Wert, aber er gilt nicht:
+    // dort misst jedes Verfahren zu breit. Zeichnen ja, messen nein.
+    bool gilt = !path.width_at_junction[i];
 }
 ```
 

@@ -48,6 +48,11 @@ def path_to_dto(path: Polyline) -> PathDto:
         path_yx=_round(flat, _COORD_DECIMALS),
         width_px=_round(path.width_px, _WIDTH_PX_DECIMALS),
         width_mm=_round(path.width_mm, _WIDTH_MM_DECIMALS),
+        width_at_junction=(
+            [bool(v) for v in path.at_junction]
+            if path.at_junction is not None
+            else [False] * path.point_count
+        ),
         length_px=round(float(path.length_px), 2),
         length_mm=round(float(path.length_mm), 3),
         is_loop=path.is_loop,
@@ -68,6 +73,8 @@ def instance_to_dto(inst: CrackInstance, include_paths: bool = True) -> Instance
         orientation_class=inst.orientation_class,
         tortuosity=round(float(inst.tortuosity), 4),
         branch_count=inst.branch_count,
+        touches_border=inst.touches_border,
+        width_samples_excluded=inst.width_samples_excluded,
         severity=inst.severity,
         width_max_px=round(float(inst.width_max_px), 3),
         width_mean_px=round(float(inst.width_mean_px), 3),
