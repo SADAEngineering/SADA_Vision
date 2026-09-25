@@ -18,6 +18,16 @@
 #
 # Ein Lauf kostet rund fünf Runner-Minuten. Das Konto hat 2.000 im Monat.
 #
+# **Der Runner ist festgenagelt, nicht `ubuntu-latest`.** Das Etikett wandert
+# am 19.10.2026 auf Ubuntu 26; ein Bruch an diesem Tag korrelierte mit keinem
+# Commit und wäre entsprechend mühsam zu finden. Ein Datum, das wir selbst
+# setzen, ist besser als eines, das GitHub setzt - beim Hochziehen erst hier
+# ändern, dann sehen, was rot wird.
+#
+# Mit Produktionsnähe hat die Wahl nichts zu tun: auf der VPS läuft nicht
+# Ubuntu, sondern der Container, und dessen Basis ist Debian
+# (python:3.12-slim-bookworm). Das Wirtssystem stellt nur Kernel und Docker.
+#
 # **In der Pipeline liegen keine Gewichte.** Der Dienst läuft hier also im
 # Notbehelf, und genau das wird geprüft: `model.trained = false`, `/health`
 # meldet `degraded`. Ein Dienst, der ohne Modell stillschweigend Unsinn
@@ -43,7 +53,7 @@ concurrency:
 jobs:
   tests:
     name: Aufräumen und Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -72,7 +82,7 @@ jobs:
 
   dienst:
     name: Dienst-Image und Container
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -238,7 +248,7 @@ jobs:
 
   compose:
     name: Compose prüfen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
