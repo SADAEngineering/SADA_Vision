@@ -34,3 +34,9 @@ samples/*
 # Die Testmodelle sind winzig und gehoeren dazu
 !tests/fixtures/*.onnx
 !tests/fixtures/*.json
+
+# Proben, die der Dienst-Job der Pipeline anlegt
+probe.png
+befund.json
+marker.png
+aufgeloest.yml

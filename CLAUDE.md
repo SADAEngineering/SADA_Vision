@@ -170,6 +170,29 @@ docker build -f deploy/Dockerfile --target dev -t sada-vision:test .
 docker run --rm -v "$(pwd -W):/app" sada-vision:test pytest -q
 ```
 
+## Die Pipeline hat drei Jobs
+
+Damit keiner den anderen verdeckt — dieselbe Regel wie in TraceForm:
+
+| Job | Prüft |
+|---|---|
+| `tests` | ruff und die 116 Tests im Testabbild |
+| `dienst` | Das Dienst-Image **und den laufenden Container** |
+| `compose` | Syntax, Variablenauflösung, und dass kein Port offen steht |
+
+**`dienst` ist keine Zugabe.** Jeder Schritt darin steht für einen Fehler,
+der beim ersten Aufsetzen tatsächlich passiert ist: ein Build ohne `--target`
+lieferte das Testabbild aus; der Dienst antwortete während einer Analyse
+nicht mehr; im Dienst-Image landete beinahe PyTorch. Alle drei fallen einem
+Testlauf nicht auf, weil sie erst am fertigen Container sichtbar werden.
+
+**In der Pipeline liegen keine Gewichte.** Der Dienst läuft dort im
+Notbehelf, und genau das wird geprüft: `trained = false`, `/health` meldet
+`degraded`. Ein Lauf kostet rund fünf Runner-Minuten; reine Doku-Commits
+lösen keinen aus.
+
+Vor einem Push nachsehen, ob der vorige Lauf grün war.
+
 ## Maße — und warum nicht IoU allein
 
 Für dünne Strukturen führt die übliche IoU in die Irre. Ein Riss von drei

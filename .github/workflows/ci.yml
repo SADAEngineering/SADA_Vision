@@ -1,0 +1,264 @@
+# Drei Jobs, damit keiner den anderen verdeckt — dieselbe Regel wie in TraceForm:
+#
+#   tests    Aufräumen (ruff) und 116 Tests im Testabbild
+#   dienst   Das Dienst-Image bauen und den Container wirklich anfassen
+#   compose  Die compose-Datei auf Syntax und Variablenauflösung
+#
+# Der Job "dienst" ist keine Zugabe. Jeder seiner Schritte steht für einen
+# Fehler, der beim ersten Aufsetzen tatsächlich passiert ist:
+#
+#   * Die Test-Stufe stand zuletzt in der Dockerfile. Ein Build ohne
+#     --target nimmt die letzte Stufe — der dokumentierte Befehl lieferte
+#     damit ein Image aus, das beim Start pytest aufruft. Ohne Fehlermeldung.
+#   * Der Dienst antwortete während einer Analyse nicht mehr, weil die
+#     Rechnung in der Ereignisschleife stand. Der Neustarter hätte einen
+#     gesunden Container mitten in der Arbeit neu gestartet.
+#   * Dem Trainings-Image fehlten Abhängigkeiten des Dienstes; Bewertung
+#     und Export wären erst nach Stunden Training am Import gescheitert.
+#
+# Ein Lauf kostet rund fünf Runner-Minuten. Das Konto hat 2.000 im Monat.
+#
+# **In der Pipeline liegen keine Gewichte.** Der Dienst läuft hier also im
+# Notbehelf, und genau das wird geprüft: `model.trained = false`, `/health`
+# meldet `degraded`. Ein Dienst, der ohne Modell stillschweigend Unsinn
+# misst, wäre schlimmer als einer, der gar nicht startet.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    # Reine Doku-Commits lösen keinen Lauf aus. An Handbuch und Verträgen
+    # wird oft geschrieben, und ein Markdown-Absatz macht keinen Test rot.
+    # Berührt ein Push auch nur eine andere Datei, läuft alles.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Aufräumen und Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Buildx einrichten
+        uses: docker/setup-buildx-action@v3
+
+      # Test- und Dienst-Image teilen sich die Stufen "build" und "base".
+      # Der Zwischenspeicher trägt deshalb über beide Jobs.
+      - name: Testabbild bauen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: dev
+          tags: sada-vision:test
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: ruff
+        run: docker run --rm -v "$PWD:/app" sada-vision:test ruff check src tests training
+
+      - name: pytest
+        run: docker run --rm -v "$PWD:/app" sada-vision:test pytest -q
+
+  dienst:
+    name: Dienst-Image und Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Buildx einrichten
+        uses: docker/setup-buildx-action@v3
+
+      # Bewusst **ohne** target: genau so, wie es im README steht. Was dabei
+      # herauskommt, muss der Dienst sein.
+      - name: Dienst-Image bauen (ohne target, wie dokumentiert)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          tags: sada-vision:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Fuer das Probebild und die Vertragspruefung: derselbe Code wie in
+      # den Tests, statt ein zweites Mal dasselbe von Hand zu schreiben.
+      - name: Testabbild bauen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: dev
+          tags: sada-vision:test
+          load: true
+          cache-from: type=gha
+
+      - name: Vorgabestufe ist der Dienst, nicht die Tests
+        run: |
+          cmd=$(docker inspect sada-vision:ci --format '{{json .Config.Cmd}}')
+          user=$(docker inspect sada-vision:ci --format '{{.Config.User}}')
+          echo "Cmd=$cmd User=$user"
+          test "$cmd" = '["python","-m","sada_vision"]' \
+            || { echo "::error::Vorgabestufe ist nicht der Dienst (Cmd=$cmd)"; exit 1; }
+          test "$user" = "vision" \
+            || { echo "::error::Der Dienst läuft als '$user' statt als 'vision'"; exit 1; }
+
+      - name: In dem Image liegt kein PyTorch
+        run: |
+          # Trainiert wird ausserhalb, serviert wird ONNX - das sind rund
+          # 2 GB je laufendem Container, und on-prem zaehlt das.
+          if docker run --rm sada-vision:ci python -c "import torch" 2>/dev/null; then
+            echo "::error::torch ist ins Dienst-Image gerutscht"; exit 1
+          fi
+          docker run --rm sada-vision:ci python -c "import onnxruntime, cv2, skimage"
+
+      - name: Container starten
+        run: |
+          docker run -d --name vision -p 127.0.0.1:8080:8080 sada-vision:ci
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/health/live >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/health/live
+
+      - name: Ohne Gewichte meldet er sich als beeinträchtigt
+        run: |
+          gesundheit=$(curl -fsS http://127.0.0.1:8080/health)
+          echo "$gesundheit"
+          echo "$gesundheit" | grep -q '"status":"degraded"' \
+            || { echo "::error::Ohne Modell muss /health 'degraded' melden"; exit 1; }
+          echo "$gesundheit" | grep -q '"trained":false' \
+            || { echo "::error::Ohne Modell muss trained=false stehen"; exit 1; }
+
+      - name: Ein Bild durchschicken
+        run: |
+          # Das Probebild kommt aus demselben Code wie die Tests: ein
+          # gezeichneter Riss bekannter Breite auf gekoerntem Beton.
+          docker run --rm -v "$PWD:/app" sada-vision:test python -c "
+          import sys; sys.path[:0] = ['/app', '/app/src']
+          from tests.synthetic import straight_crack, with_aruco, as_png
+          rgb, _ = straight_crack(h=600, w=800, width_px=6.0, angle_deg=20.0)
+          open('/app/probe.png','wb').write(as_png(with_aruco(rgb, 7, 200, 40)))
+          "
+          curl -fsS -F "image=@probe.png" -F "marker_size_mm=100" \
+            http://127.0.0.1:8080/api/v1/detect/crack -o befund.json
+          cat befund.json | head -c 400; echo
+
+      - name: Der Vertrag stimmt
+        run: |
+          docker run --rm -i -v "$PWD:/app" sada-vision:test python - <<'PY'
+          import json
+
+          befund = json.load(open("/app/befund.json"))
+
+          # Kein null in der ganzen Antwort: JsonUtility kennt kein Optional,
+          # und ein fehlendes Feld faellt dort nicht auf - es wird zu 0.
+          def pruefe(knoten, pfad=""):
+              if knoten is None:
+                  raise SystemExit(f"null bei {pfad}")
+              if isinstance(knoten, dict):
+                  for k, v in knoten.items():
+                      pruefe(v, f"{pfad}.{k}")
+              elif isinstance(knoten, list):
+                  for i, v in enumerate(knoten):
+                      pruefe(v, f"{pfad}[{i}]")
+
+          pruefe(befund)
+
+          # Objektlisten im Umschlag
+          for feld in ("instances", "warnings"):
+              assert "items" in befund[feld], f"{feld} steht nicht im Umschlag"
+
+          # Der Marker wurde erkannt: 200 px Kante entsprechen 100 mm.
+          assert befund["scale"]["source"] == "aruco", befund["scale"]
+          assert abs(befund["scale"]["mm_per_px"] - 0.5) < 0.05, befund["scale"]
+
+          # Der Verlauf ist flach und paarweise
+          for instanz in befund["instances"]["items"]:
+              for pfad in instanz["paths"]["items"]:
+                  n = pfad["point_count"]
+                  assert len(pfad["path_yx"]) == 2 * n
+                  assert len(pfad["width_px"]) == n
+                  assert len(pfad["width_mm"]) == n
+
+          print(f"Vertrag in Ordnung, {befund['summary']['instance_count']} Befunde")
+          PY
+
+      - name: Er bleibt während einer Rechnung ansprechbar
+        run: |
+          # Steht die Analyse in der Ereignisschleife, antwortet /health/live
+          # waehrend eines Laufs nicht mehr - und der Neustarter killt einen
+          # gesunden Container mitten in der Arbeit.
+          curl -fsS -F "image=@probe.png" -F "marker_size_mm=100" \
+            http://127.0.0.1:8080/api/v1/detect/crack -o /dev/null &
+          analyse=$!
+          sleep 1
+          for i in $(seq 1 5); do
+            curl -fsS --max-time 3 http://127.0.0.1:8080/health/live >/dev/null \
+              || { echo "::error::Dienst antwortet während einer Analyse nicht"; exit 1; }
+            sleep 0.5
+          done
+          wait $analyse
+          echo "Während der Analyse durchgehend ansprechbar"
+
+      - name: Markervorlage kommt heraus
+        run: |
+          curl -fsS "http://127.0.0.1:8080/tools/marker.png?size_mm=60" -o marker.png
+          file marker.png | grep -q PNG || { echo "::error::Keine PNG-Vorlage"; exit 1; }
+
+      - name: Kein Klartext-Zugriffsprotokoll im JSON-Strom
+        if: always()
+        run: |
+          # uvicorns Zugriffsprotokoll ist Klartext und stand mitten im
+          # JSON-Strom - fuer jede Auswertung Muell. Es ist abgeschaltet,
+          # die Middleware protokolliert ohnehin jede Anfrage strukturiert.
+          docker logs vision 2>&1 | tail -20
+          if docker logs vision 2>&1 | grep -qE '"(GET|POST) /[^"]*HTTP/1\.[01]" [0-9]{3}'; then
+            echo "::error::uvicorns Klartext-Zugriffsprotokoll ist wieder an"
+            exit 1
+          fi
+          # Und unsere eigenen Ereignisse muessen JSON sein.
+          docker logs vision 2>&1 | grep '"event":' | head -1 \
+            | python3 -c "import json,sys; json.loads(sys.stdin.read()); print('Ereignisse sind JSON')"
+
+      - name: Container stoppen
+        if: always()
+        run: docker rm -f vision || true
+
+  compose:
+    name: Compose prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Syntax und Variablenauflösung. Hochgefahren wird die Datei nicht -
+      # das macht der Job "dienst" mit dem nackten Container.
+      - name: compose config
+        run: docker compose -f deploy/compose.yml config --quiet
+
+      # Der Dienst hat keine Anmeldung. Im Betrieb läuft er nur im internen
+      # Netz von TraceForm; wer hier versehentlich einen Port auf 0.0.0.0
+      # aufmacht, stellt einen offenen Bildverarbeiter ins Netz.
+      - name: Kein Port auf allen Schnittstellen
+        run: |
+          docker compose -f deploy/compose.yml config > aufgeloest.yml
+          veroeffentlicht=$(grep -c "published:" aufgeloest.yml || true)
+          gebunden=$(grep -c 'host_ip: 127.0.0.1' aufgeloest.yml || true)
+          echo "veröffentlichte Ports: $veroeffentlicht, davon an 127.0.0.1 gebunden: $gebunden"
+          if [ "$veroeffentlicht" -ne "$gebunden" ]; then
+            grep -B2 -A2 "published:" aufgeloest.yml
+            echo "::error::Ein Port ist nicht an 127.0.0.1 gebunden - der Dienst hat keine Anmeldung"
+            exit 1
+          fi
